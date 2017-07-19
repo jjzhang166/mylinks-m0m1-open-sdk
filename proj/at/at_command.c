@@ -115,20 +115,26 @@ void uart_init(void)
 
 void user_init(void){
 	uart_init();
+	//at_test:用户也自定义at指令
 	at_cmd_init(at_test);
 
+	//mount mini fs
 	if(mfmount(FS1_FLASH_ADDR) == RES_OK){
+		//当连接AP时，可以通过下面的网页来打开内置网页
 		dnsserver_init("set.mqlinks.com");
 		webserver_init();
 	}
 	for(;;)
 	{
+		//此函数必须存在
 		wifi_reset_proc();
+		//此函数必须存在
 		at_net_proc();
 #ifdef CONFIG_OMNICONFIG
 		omni_state_connecting();
 #endif
 		tcp_server_timeout_proc();
+		//此函数必须存在
 		mylinks_gpio_proc();
 	}
 }
