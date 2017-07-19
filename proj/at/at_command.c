@@ -25,8 +25,6 @@
 #include <net_api.h>
 #include <wla_api.h>
 #include <gpio.h>
-#include <version.h>
-#include <built_info.h>
 #include <cfg_api_new.h>
 #include <user_config.h>
 
