@@ -1,0 +1,201 @@
+#include <lib_autoconf.h>
+#include <c_types.h>
+#include <socket_api.h>
+#include <cfg_api_new.h>
+#include <user_config.h>
+#include <webserver/webserver.h>
+
+#define WEB_DATE "Date: Fri, 24 Jul 2016 7:31:18 GMT"
+
+extern char match[];
+
+void requesttimeout(int client)  
+{  
+    char *buf;
+    size_t len;  
+    buf = (char *)malloc(CONTENT_LEN);
+    if( NULL == buf ){
+        return ;
+    }
+    /* HTTP method 不被支持*/
+    STRSEND(client,"HTTP/1.1 408 Request Timeout");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/ 
+    STRSEND(client, SERVER_STRING);
+    STRSEND(client,"Content-Type: text/html");
+    STRSEND(client, "\r\n");
+
+    len = 95;
+    len = sprintf(buf, "Content-Length: %d",len); 
+    send(client, buf, len,0);
+    STRSEND(client,"\r\n");
+    STRSEND(client, "Connection: Close");
+    STRSEND(client, "\r\n");
+    STRSEND(client,"\r\n");
+
+    STRSEND(client,"<HTML><HEAD><TITLE>Request Timeout");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"</TITLE></HEAD>");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"<BODY><P>Request Timeout");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"</BODY></HTML>");
+    STRSEND(client,"\r\n");
+    free(buf);
+    return;
+}
+
+
+/**********************************************************************/  
+/* Inform the client that the requested web method has not been 
+ * implemented. 
+ * Parameter: the client socket */  
+/**********************************************************************/  
+void unimplemented(int client)  
+{  
+    char *buf;
+    size_t len;  
+    buf = (char *)malloc(CONTENT_LEN);
+    if( NULL == buf ){
+        return ;
+    }
+    /* HTTP method 不被支持*/
+    STRSEND(client,"HTTP/1.1 501 Method Not Implemented");
+    STRSEND(client,"\r\n");
+
+    /*服务器信息*/
+    STRSEND(client,SERVER_STRING); 
+    STRSEND(client,"Content-Type: text/html"); 
+    STRSEND(client,"\r\n");
+
+    len = 93;
+    len = sprintf(buf, "Content-Length: %d",len); 
+    send(client, buf, len,0);
+    STRSEND(client,"\r\n");
+    STRSEND(client, "Connection: Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client, "\r\n");
+    STRSEND(client, "<HTML><HEAD><TITLE>Method Not Implemented");
+    STRSEND(client,"\r\n");
+
+    STRSEND(client,"</TITLE></HEAD>");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"<BODY><P>HTTP request method not supported.");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"</BODY></HTML>");
+    STRSEND(client,"\r\n");
+    free(buf);
+    return;
+}
+
+
+void authfaild(int client){
+    char *buf;
+    size_t len; 
+    buf = (char *)malloc(CONTENT_LEN);
+    if( NULL == buf ){
+        return ;
+    }
+    STRSEND(client,"HTTP/1.1 401 Unauthorized");
+    STRSEND(client,"\r\n");
+
+    /*服务器信息*/  
+    STRSEND(client,SERVER_STRING);
+    STRSEND(client,"WWW-Authenticate: Basic realm=\"USER LOGIN\"");
+    STRSEND(client,"\r\n");
+
+    len = 136;
+    len = sprintf(buf, "Content-Length: %d",len); 
+    send(client,buf,len,0);
+    STRSEND(client,"\r\n");
+
+    STRSEND(client,"Connection: Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+
+    STRSEND(client,"<HTML><HEAD><TITLE>401 Unauthorized</TITLE></HEAD><BODY BGCOLOR=\"#cc9999\"><H4>401 Unauthorized</H4>Authorization required.</BODY></HTML>");
+    free(buf);
+    return;
+}
+
+
+void send_cache_header(int client){
+    STRSEND(client,WEB_DATE);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Last-Modified: Date: Fri, 24 Jul 2016 8:18:18 GMT");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"ETag: ");
+    STRSEND(client,match);
+    //send(client,match,strlen(match),0);
+    STRSEND(client,"\r\n");    
+    return;
+}
+
+
+void file_cache(int client)  
+{
+    STRSEND(client,"HTTP/1.1 304 Not Modified");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/ 
+    STRSEND(client, SERVER_STRING);
+    STRSEND(client,WEB_DATE);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"ETag: ");
+    STRSEND(client,match);
+    //send(client,match,strlen(match),0);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    return;
+}
+
+
+
+/**********************************************************************/  
+/* Give a client a 404 not found status message. */  
+/**********************************************************************/  
+void not_found(int client,const char *filename)  
+{  
+    char *buf; 
+    buf = (char *)malloc(CONTENT_LEN); 
+    if( NULL == buf ){
+        return ;
+    }
+#if PRINT_FLAG
+    printf("not_found\n");  
+#endif
+    /* 404 页面 */
+    STRSEND(client,"HTTP/1.1 404 NOT FOUND");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/
+    STRSEND(client,SERVER_STRING);
+    STRSEND(client,"Content-Type: text/html");
+    STRSEND(client,"\r\n");
+
+    sprintf(buf, "Content-Length: %d",129 + strlen(filename)); 
+    //send(client,buf,strlen(buf),0);
+    STRSEND(client,buf);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"<HTML><TITLE>Not Found</TITLE>");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"<BODY><h1>Not Found</h1>");
+    STRSEND(client,"<P>The requested URL ");
+    STRSEND(client,filename);
+
+//    send(client,filename,strlen(filename),0);
+
+    STRSEND(client," was not found on this server.</P>");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"</BODY></HTML>");
+    STRSEND(client,"\r\n");
+    free(buf);  
+    return;
+}
+
+
+

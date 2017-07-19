@@ -1,0 +1,22 @@
+#ifndef __AT_CMD_WIFI_H
+#define __AT_CMD_WIFI_H
+
+extern void at_exeCmdWmode(unsigned char id);
+extern void at_setupCmdWmode(unsigned char id,char *pPara);
+
+extern void at_exeCmdCwjap(unsigned char id);
+extern void at_setupCmdCwjap(unsigned char id,char *pPara);
+
+extern void at_exeCmdCwslk(unsigned char id);
+
+extern void at_exeCmdCwjap(uint8_t id);
+extern void at_setupCmdCwjap(uint8_t id, char *pPara);
+
+extern void at_exeCmdCwscan(uint8_t id);
+extern void at_setupCmdCwscan(uint8_t id, char *pPara);
+
+extern void at_exeCmdCwann(uint8_t id);
+extern void at_setupCmdCwann(uint8_t id, char *pPara);
+
+extern void at_exeCmdlann(uint8_t id);
+#endif

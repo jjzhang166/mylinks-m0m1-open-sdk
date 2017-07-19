@@ -1,0 +1,266 @@
+#include <lib_autoconf.h>
+#include <c_types.h>
+#include <socket_api.h>
+#include <cfg_api_new.h>
+#include <user_config.h>
+#include <webserver/webserver.h>
+#include <minifs/mfs.h>
+
+#define WEB_DATE "Date: Fri, 24 Jul 2016 7:31:18 GMT"
+#define READ_FILE_LEN 1460
+extern char match[];
+
+
+/**********************************************************************/
+/* Put the entire contents of a file out on a socket.  This function
+ * is named after the UNIX "cat" command, because it might have been
+ * easier just to do something like pipe, fork, and exec("cat").
+ * Parameters: the client socket descriptor
+ *             FILE pointer for the file to cat */
+/**********************************************************************/
+void cat(int client,struct minifs *fs)
+{
+
+ char *buf;
+ int16_t postLen;
+ int wirteLen;
+ wirteLen = mftell(fs);
+ buf = (char *)malloc((wirteLen > READ_FILE_LEN)?READ_FILE_LEN:wirteLen);
+ if(NULL == buf){
+    return;
+ }
+ do{
+    postLen = mfread(fs,buf,READ_FILE_LEN);
+    if(postLen <= 0){
+        break;
+    }
+    //printf("read len:%d\r\n",postLen);
+    //printf("heap:%d\n", system_get_free_heap_size());
+    wirteLen = send(client,buf,postLen,0);
+    if(wirteLen != postLen){
+        break;
+    }
+ }while(postLen ==  READ_FILE_LEN);
+ free(buf);
+ return;
+}
+
+void requesttimeout(int client)  
+{  
+    char *buf; 
+    struct minifs fs;
+    if(mfopen(&fs,"requesttimeout.html") < 0){
+        return;   
+    }
+    buf = (char *)malloc(CONTENT_LEN);
+ 
+    if( NULL == buf ){
+        return ;
+    }
+    /* HTTP method 不被支持*/
+    STRSEND(client,"HTTP/1.1 408 Request Timeout");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/ 
+    STRSEND(client, SERVER_STRING);
+    STRSEND(client,"Content-Type: ");
+    STRSEND(client,"text/html");
+    STRSEND(client, "\r\n");
+
+    sprintf(buf, "Content-Length: %d",mftell(&fs)); 
+    STRSEND(client,buf);
+    free(buf);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    cat(client,&fs);
+
+
+    return;
+}
+
+
+/**********************************************************************/  
+/* Inform the client that the requested web method has not been 
+ * implemented. 
+ * Parameter: the client socket */  
+/**********************************************************************/  
+void unimplemented(int client)  
+{  
+    char *buf;
+    struct minifs fs;
+    buf = (char *)malloc(CONTENT_LEN);
+    if(mfopen(&fs,"unimplemented.html") < 0){
+        return;   
+    }  
+    if( NULL == buf ){
+        return ;
+    }
+    /* HTTP method 不被支持*/
+    STRSEND(client,"HTTP/1.1 501 Method Not Implemented");
+    STRSEND(client,"\r\n");
+
+    /*服务器信息*/
+    STRSEND(client,SERVER_STRING); 
+    STRSEND(client,"Content-Type: ");
+    STRSEND(client,"text/html");
+    STRSEND(client,"\r\n");
+
+    sprintf(buf, "Content-Length: %d",mftell(&fs)); 
+    STRSEND(client,buf);
+    free(buf);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    cat(client,&fs);
+    return;
+}
+
+
+void authfaild(int client){
+    char *buf;
+    struct minifs fs;
+    buf = (char *)malloc(CONTENT_LEN);
+    if(mfopen(&fs,"authfaild.html") < 0){
+        return;   
+    }
+    if( NULL == buf ){
+        return ;
+    }
+    STRSEND(client,"HTTP/1.1 401 Unauthorized");
+    STRSEND(client,"\r\n");
+
+    /*服务器信息*/  
+    STRSEND(client,SERVER_STRING);
+    STRSEND(client,"WWW-Authenticate: Basic realm=\"USER LOGIN\"");
+    STRSEND(client,"\r\n");
+
+    sprintf(buf, "Content-Length: %d",mftell(&fs)); 
+    STRSEND(client,buf);
+    free(buf);
+    STRSEND(client,"\r\n");
+
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    cat(client,&fs);
+    return;
+}
+
+
+void send_cache_header(int client){
+    STRSEND(client,WEB_DATE);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Last-Modified: Date: Fri, 24 Jul 2016 8:18:18 GMT");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"ETag: ");
+    STRSEND(client,match);
+    //send(client,match,strlen(match),0);
+    STRSEND(client,"\r\n");    
+    return;
+}
+
+
+void file_cache(int client)  
+{
+    STRSEND(client,"HTTP/1.1 304 Not Modified");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/ 
+    STRSEND(client, SERVER_STRING);
+    STRSEND(client,WEB_DATE);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"ETag: ");
+    STRSEND(client,match);
+    //send(client,match,strlen(match),0);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    return;
+}
+
+
+
+/**********************************************************************/  
+/* Give a client a 404 not found status message. */  
+/**********************************************************************/  
+int8_t not_found(int client)  
+{  
+    char *buf; 
+    struct minifs fs;
+    buf = (char *)malloc(CONTENT_LEN); 
+    if(mfopen(&fs,"notfound.html") < 0){
+        return -1;   
+    }
+    if( NULL == buf ){
+        return -1;
+    }
+#if PRINT_FLAG
+    printf("not_found\n");  
+#endif
+    /* 404 页面 */
+    STRSEND(client,"HTTP/1.1 404 NOT FOUND");
+    STRSEND(client,"\r\n");
+    /*服务器信息*/
+    STRSEND(client,SERVER_STRING);
+    STRSEND(client,"Content-Type: ");
+    STRSEND(client,"text/html");
+    STRSEND(client,"\r\n");
+    sprintf(buf, "Content-Length: %d",mftell(&fs)); 
+    //send(client,buf,strlen(buf),0);
+    STRSEND(client,buf);
+    free(buf);
+    STRSEND(client,"\r\n");
+    STRSEND(client,"Connection: ");
+    STRSEND(client,"Close");
+    STRSEND(client,"\r\n");
+    STRSEND(client,"\r\n");
+    cat(client,&fs);
+
+    return 0;
+}
+
+int8_t post_not_found(int client,webConn *conn){
+    return not_found(client);
+}
+
+
+
+void http_head(int client,int bodyLen)  
+{  
+  char *buf;
+  int len;  
+  buf = (char *)malloc(CONTENT_LEN);
+  if( NULL == buf ){
+    return;
+  }
+  STRSEND(client,"HTTP/1.1 200 OK");
+  STRSEND(client,"\r\n");
+  
+  /*服务器信息*/  
+  STRSEND(client, SERVER_STRING);
+  STRSEND(client,"Content-Type: ");
+  STRSEND(client,"text/html");
+  STRSEND(client,"\r\n");
+
+  if(bodyLen > 0){
+    len = sprintf(buf, "Content-Length: %d",bodyLen); 
+    send(client,buf,len,0);
+    STRSEND(client,"\r\n");
+  }
+  free(buf);
+
+  STRSEND(client,"Connection: ");
+  STRSEND(client,"Close");
+  STRSEND(client,"\r\n");
+  STRSEND(client,"\r\n");
+  
+  return;
+}
+
+

@@ -1,0 +1,970 @@
+/*=============================================================================+
+|                                                                              |
+| Copyright 2012                                                               |
+| Montage Inc. All right reserved.                                             |
+|                                                                              |
++=============================================================================*/
+/*!
+*   \file socket_api.c
+*   \brief  Socket API functions.
+*   \author Montage
+*/
+
+/*=============================================================================+
+| Included Files
++=============================================================================*/
+#include <stdint.h>
+#include <common.h>
+#include <lynx_dev.h>
+#include <wbuf.h>
+#include <event.h>
+#include <netif/etharp.h>
+#include <lwip/tcpip.h>
+#include <lwip/netif.h>
+#include <lwip/sockets.h>
+#include <net_api.h>
+#include <cfg_api_new.h>
+#include <socket_api.h>
+#include <wla_api.h>
+#include "../atcmd/user_config.h"
+#include "../atcmd/at.h"
+
+extern unsigned short at_revLen[];
+extern at_stateType  at_state;
+extern unsigned char specialAtState;
+extern char conStatus[];
+
+unsigned char *net_rev_buf[2] = {NULL,NULL};
+net_bufferCnt net_buffer_count[2]={
+	{NULL,NULL},
+	{NULL,NULL}
+};
+static int s_timeout = 0;
+#define TCPSOCKET_BUFFERSIZE    (1*1024)
+int conn_amount;                 // current connection amount  
+static char tcpserver_running = 0;
+static char tcpserver_sig = 0;
+static char tcprx_running = 0;
+static char tcprx_sig = 0;
+
+static int s_tcpServerSocHd = -1;
+enum
+{
+	TASK_INIT = 1,
+	TASK_DOWN = 2,
+};
+
+extern struct net_dev *idev;
+extern struct net_dev idev_g;
+extern int at_cmd_loop(void);
+//static int s_mutiConn = 0;
+//static int s_dinfo = 0;
+
+extern sdk_param g_atParam;
+void tcp_rx_start();
+
+unsigned short check_buffer_len(unsigned char id)
+{
+	int len = 0;
+	if(NULL != net_rev_buf[id]){
+		len = net_buffer_count[id].writeCnt - net_buffer_count[id].readCnt;
+		if(len < 0){
+			len += SOCKET_LEN;
+		}
+	}
+	return (unsigned short)len;
+}
+
+
+void net_read_save_to_buffer(unsigned char id,unsigned short len)
+{
+	unsigned short read_len = 0;
+	char temp[16];
+	at_backOkHead;
+	int stat;
+	//unsigned short data_len;
+	read_len = check_buffer_len(id);
+	
+	if(read_len > len)
+	{
+		read_len = len;
+	}
+	sprintf(temp,"%d",read_len);
+	uart0_sendStr(temp);
+	if(!read_len){
+		goto NET_READ_OUT;
+	}
+	uart0_sendStr(",");
+	
+#if 0
+	if(net_buffer_count[id].readCnt < net_buffer_count[id].writeCnt){
+		serial_write(0, net_buffer_count[id].readCnt, read_len);
+		net_buffer_count[id].readCnt +=read_len;
+	}else{
+		data_len = net_rev_buf[id] + SOCKET_LEN - net_buffer_count[id].readCnt;
+		serial_write(0, net_buffer_count[id].readCnt, data_len);
+		read_len -=data_len;
+		if(read_len > 0){
+			serial_write(0, net_rev_buf[id], read_len);
+			net_buffer_count[id].readCnt = net_rev_buf[id] + read_len;
+		}
+	}
+	if(net_buffer_count[id].readCnt >=(net_rev_buf[id] + SOCKET_LEN)){
+		net_buffer_count[id].readCnt = net_rev_buf[id];
+	}
+#else
+	read_len = 0;
+	while((read_len < len) && (net_buffer_count[id].writeCnt!= net_buffer_count[id].readCnt))
+	{
+		serial_write(0, net_buffer_count[id].readCnt++, 1);
+		
+		if(net_buffer_count[id].readCnt >=(net_rev_buf[id] + 2048))
+		{
+			net_buffer_count[id].readCnt = net_rev_buf[id];
+		}
+		read_len++;
+	}
+#endif
+
+NET_READ_OUT:
+	at_backTail;
+	return;
+}
+
+
+
+
+
+void rev_copy_buffer(uint8_t id,uint8_t *buf, uint16_t len)
+{
+	uint16_t cnt;
+  //拷贝前先把内存分配好。
+  if(NULL == net_rev_buf[id]){
+  	//uart0_sendStr("malloc first\r\n");
+  	net_rev_buf[id] = (uint8_t *)malloc(SOCKET_LEN);
+  	if(NULL == net_rev_buf[id]){
+  		//uart0_sendStr("malloc err\r\n");
+  		return;
+  	}
+  	net_buffer_count[id].writeCnt = net_buffer_count[id].readCnt = net_rev_buf[id];
+  }
+  
+  while(len){
+  	cnt = net_rev_buf[id] + SOCKET_LEN - net_buffer_count[id].writeCnt;
+  	if(len <= cnt){
+  		memcpy(net_buffer_count[id].writeCnt,buf,len);
+  		net_buffer_count[id].writeCnt += len;
+  		len = 0;
+  	}else{
+  		memcpy(net_buffer_count[id].writeCnt,buf,cnt);
+  		len -= cnt;
+  		net_buffer_count[id].writeCnt = net_rev_buf[id] + cnt;
+  	}
+  	if(net_buffer_count[id].writeCnt >= (net_rev_buf[id] + SOCKET_LEN)){
+  		net_buffer_count[id].writeCnt = net_rev_buf[id];
+  	}
+  }
+
+  return;
+}
+
+
+
+
+int check_socket_valiable(int idx)
+{
+	if (idev->s[idx] < 0)
+	{
+		return 0;
+	}
+	return 1;
+
+}
+int close_soctet(int socket)
+{
+	if(socket != -1)
+	{
+		closesocket( socket );
+	}
+	else
+	{
+		return -1;
+	}
+	return 0;
+}
+/*----------------------------------------------------------------*/
+/**
+ * The function adds a socket.
+ *
+ * @param argc Arguments count.
+ * @param argv[0]: The socket index.
+ * @param argv[1]: The socket type, TCP or UDP.
+ * @param argv[2]: The IP address.
+ * @param argv[3]: Destination port, 0~65535.
+ * @param argv[4]: [TCP:keeplive,UDP:lport]
+ * @return 0: succeed\n -1: failed
+ */
+/*----------------------------------------------------------------*/
+#if 0
+int net_socket_add(int argc, char *argv[])
+{
+	unsigned int  r_port, l_port;
+	int s, type, prot, idx, ret;
+	struct sockaddr_in *localaddr, *fromaddr;
+	char *conType = NULL;
+	char *ip =NULL;
+	int udpmode = 0;
+	int value = 0;
+	int keeplive = 0;
+
+	if (s_mutiConn == 1)
+	{
+		idx = atoi(argv[0]);
+		conType = argv[1];
+		if (!strncmp(conType, "TCP",3))
+		{
+			type = SOCK_STREAM;
+			prot = IPPROTO_TCP;
+			ip = argv[2];
+			r_port = atoi(argv[3]);
+			if (argc == 5)
+			{
+				keeplive = atoi(argv[4]);
+			}
+		}
+		else if (!strncmp(conType, "UDP",3))
+		{
+			type = SOCK_DGRAM;
+			prot = IPPROTO_UDP;
+			ip = argv[2];
+			r_port = atoi(argv[3]);
+			if (argc == 6)
+			{
+				l_port = atoi(argv[4]);
+				udpmode = atoi(argv[5]);
+			}
+		}
+	}
+	else
+	{
+		idx = 0;
+		conType = argv[0];
+		if (!strncmp(conType, "TCP",3))
+		{
+			type = SOCK_STREAM;
+			prot = IPPROTO_TCP;
+			ip = argv[1];
+			r_port = atoi(argv[2]);
+			if (argc == 4)
+			{
+				keeplive = atoi(argv[3]);
+			}
+		}
+		else if (!strncmp(conType, "UDP",3))
+		{
+			type = SOCK_DGRAM;
+			prot = IPPROTO_UDP;
+			ip = argv[1];
+			r_port = atoi(argv[2]);
+			if (argc == 5)
+			{
+				l_port = atoi(argv[3]);
+				udpmode = atoi(argv[4]);
+			}
+		}
+	}
+	if ((idx < 0) || (idx >= MEMP_NUM_NETCONN))
+		goto help;
+
+	if (idev->s[idx] != -1)
+	{
+		serial_printf(" exist\n");
+		goto help;
+	}
+
+	if ((r_port < 0) || (r_port > 65535))
+		goto help;
+
+	/* FIXME: link and network status */
+	localaddr = &idev->localaddr[idx];
+	fromaddr = &idev->fromaddr[idx];
+	s = socket(AF_INET, type, prot);
+	if (s < 0)
+	{
+		serial_printf(" get sock error\n");
+		goto help;
+	}	
+	if (prot == IPPROTO_UDP)
+	{
+		localaddr->sin_family = AF_INET;
+		localaddr->sin_port = htons(l_port);
+		localaddr->sin_addr.s_addr = htonl(0x00000000UL);
+
+		fromaddr->sin_family = AF_INET;
+		fromaddr->sin_port = htons(r_port);
+		fromaddr->sin_addr.s_addr = inet_addr(ip);
+		ret = connect(s,(struct sockaddr *)fromaddr, sizeof( struct sockaddr_in));
+
+	}
+	else if (prot == IPPROTO_TCP)
+	{		
+		fromaddr->sin_family = AF_INET;
+		fromaddr->sin_port= htons(r_port);
+		fromaddr->sin_addr.s_addr = inet_addr(ip);
+		ret = connect(s,(struct sockaddr *)fromaddr, sizeof( struct sockaddr_in));
+		if (keeplive > 0 && keeplive < 7200)
+		{
+			if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, (char *) &keeplive,sizeof(int)) == -1)
+			{
+				serial_printf(" set sock error\n");
+				return -1;
+			}
+		}
+	}
+	serial_printf(" ret=%d\n", ret);
+	if (ret == 0)
+	{
+		idev->s[idx] = s;
+		idev->type[idx] = type;
+	}
+	else if (s >= 0)
+	{
+		closesocket(s);
+		idev->s[idx] = -1;
+	}
+
+	return ret;
+help:
+	return -1;
+}
+#else
+uint8_t socka_ip[16];
+uint8_t sockb_ip[16];
+
+int net_socket_add(int idx, int type)
+{
+	uint16_t r_port, l_port;
+	int s, prot, ret;
+	struct sockaddr_in *localaddr, *fromaddr;
+	char *conType = NULL;
+	char *ip =NULL;
+	int value = 0;
+	int keeplive = 0;
+	trans_param *tp = NULL;
+	serial_printf("----------->idx:%d,type:%d\n",idx,type);
+	if(type > SOCK_DGRAM){
+		goto help;
+	}
+	if(!idx){
+		tp = &g_atParam.socka;
+		ip = socka_ip;
+	}else{
+		tp = &g_atParam.sockb;
+		ip = sockb_ip;
+	}
+
+	if (SOCK_STREAM == type)
+	{
+		prot = IPPROTO_TCP;
+		r_port = tp->port;
+		keeplive = tp->time_alive;
+		serial_printf("connect ip:%s,port:%d\n",ip,r_port);
+	}
+	else if (SOCK_DGRAM == type)
+	{
+#if 0
+		//客户端
+		if(tp->type & SERVER_TYPE){
+			r_port = 15724;
+			l_port = tp->port;
+			prot = IPPROTO_IP;
+		}else{
+			r_port = tp->port;
+			l_port = (!idx)?5800:5808;
+			prot = IPPROTO_IP;
+		}
+#else
+		prot = IPPROTO_IP;
+		//客户端
+		if(tp->type & SERVER_TYPE){
+			r_port = (!idx)?5800:5808;
+			l_port = tp->port;
+		}else{
+			r_port = tp->port;
+			l_port = 15724;
+		}
+		serial_printf("connect ip:%s,port:%d\n",ip,r_port);
+#endif
+	}
+
+
+	if (idev->s[idx] != -1)
+	{
+		serial_printf(" exist\n");
+		goto help;
+	}
+
+	if ((r_port < 0) || (r_port > 65535)){
+		goto help;
+	}
+
+	/* FIXME: link and network status */
+	localaddr = &idev->localaddr[idx];
+	fromaddr = &idev->fromaddr[idx];
+	s = socket(AF_INET, type, prot);
+	if (s < 0)
+	{
+		serial_printf(" get sock error\n");
+		goto help;
+	}
+	if (prot == IPPROTO_IP)
+	{
+		serial_printf("udp server\n");
+		fromaddr->sin_family = AF_INET;
+		fromaddr->sin_port = htons(r_port);
+		fromaddr->sin_addr.s_addr = htonl(INADDR_ANY);
+		fromaddr->sin_len = sizeof(struct sockaddr_in);
+
+		localaddr->sin_family = AF_INET;
+		localaddr->sin_port = htons(l_port);
+		localaddr->sin_addr.s_addr = inet_addr(ip);
+		localaddr->sin_len = sizeof(struct sockaddr_in);
+		ret = bind(s, (struct sockaddr *)fromaddr, sizeof(struct sockaddr_in));
+	}
+	else if (prot == IPPROTO_TCP)
+	{		
+		fromaddr->sin_family = AF_INET;
+		fromaddr->sin_port= htons(r_port);
+		fromaddr->sin_addr.s_addr = inet_addr(ip);
+		ret = connect(s,(struct sockaddr *)fromaddr, sizeof( struct sockaddr_in));
+		if (keeplive > 0 && keeplive < 7200)
+		{
+			if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, (char *) &keeplive,sizeof(int)) == -1)
+			{
+				serial_printf(" set sock error\n");
+				return -1;
+			}
+		}
+	}
+	if (ret == 0)
+	{
+		idev->s[idx] = s;
+		//idev->type[idx] = type;
+		serial_printf(" %d:connect=%d,%d\n", idx,ret,idev->s[idx]);
+	}
+	else if (s >= 0)
+	{
+		closesocket(s);
+		idev->s[idx] = -1;
+	}
+
+	return ret;
+help:
+	return -1;
+}
+#endif
+
+/*----------------------------------------------------------------*/
+/**
+ * The function deletes a socket.
+ *
+ * @param idx The socket index.
+ * @return 0: succeed\n -1: failed
+ */
+/*----------------------------------------------------------------*/
+int net_socket_del(int idx)
+{
+	int s;
+
+	if ((idx < 0) || (idx >= MEMP_NUM_NETCONN))
+	{
+		goto help;
+	}
+	s = idev->s[idx];
+	if (s == -1)
+	{
+		goto help;
+	}
+	closesocket(s);
+	idev->s[idx] = -1;
+	return 0;
+help:
+	return -1;
+}
+
+/*----------------------------------------------------------------*/
+/**
+ * The function sends data to the socket.
+ *
+ * @param idx The socket index.
+ * @return 0: succeed\n -1: failed
+ */
+/*----------------------------------------------------------------*/
+int net_socket_tx(int idx, char *data,int len)
+{
+	socklen_t socklen;
+	int s;
+	trans_param *tp = NULL;
+	tp = (!idx)?&g_atParam.socka:&g_atParam.sockb;
+	if ((idx < 0) || (idx >= MEMP_NUM_NETCONN)){
+		goto help;
+	}
+	if(idx == (MEMP_NUM_NETCONN - 1)||((tp->type & (PORTO_TYPE|SERVER_TYPE)) != (TCP|SERVER))){
+		if(conStatus[idx] != IPCONNECTD){
+			goto help;
+		}
+	}
+
+	s = idev->s[idx];
+	if (s == -1){
+		goto help;
+	}
+	//serial_printf("\n <%s><%d><%d>!!\n",__FUNCTION__,__LINE__,len);
+
+/* Mylinks is not user
+	data[len++] = 0xa;		// '\n'
+*/
+
+	socklen = sizeof(struct sockaddr_in);
+	if((tp->type & (PORTO_TYPE|SERVER_TYPE)) == (UDP|CLIENT)){
+		idev->fromaddr[idx].sin_port = idev->localaddr[idx].sin_port;
+		idev->fromaddr[idx].sin_addr.s_addr = idev->localaddr[idx].sin_addr.s_addr;
+	}
+	sendto(s, data, len, 0,
+			(struct sockaddr *)&idev->fromaddr[idx], socklen);
+	return 0;
+help:
+	return -1;
+}
+
+/*----------------------------------------------------------------*/
+/**
+ * The function gets data from all socket.
+ *
+ * @param idx The socket index.
+ * @return 0: succeed\n -1: failed
+ */
+/*----------------------------------------------------------------*/
+extern char trans_mode;
+
+
+int net_socket_reveive(int idx,int socketId)
+{
+	socklen_t socklen;
+	int len, max_len;
+
+	socklen = sizeof(struct sockaddr_in);
+	max_len = SOCKET_LEN;
+
+	//memset(idev->trans_txb,0x0,sizeof(idev->trans_txb));
+	
+	if (socketId == -1)
+	{
+		return -1;
+	}
+
+	len = recvfrom(socketId, idev->trans_txb, SOCKET_LEN, 0,
+					(struct sockaddr *)&idev->fromaddr[idx], &socklen);
+	if (len <= 0) 
+	{
+		net_socket_del(idx);
+
+		if(!((!idx) && (TCP_SERVER == CHECK_PROTOCOL(g_atParam.socka.type)))){
+			conStatus[idx] = CONNECT;
+		}
+		
+		serial_printf("\n net_socket_rx %d\n",__LINE__);
+	} 
+	else 
+	{
+ 		//透传形式
+		if(at_statIpTraning ==  at_state)
+		{
+			serial_write(0, idev->trans_txb, len);
+		}
+		else
+		{
+			idx = (idx == (MEMP_NUM_NETCONN - 1))?1:0;
+
+			rev_copy_buffer(idx,(uint8_t *)idev->trans_txb,len);
+
+
+			if(at_revLen[idx]){
+				net_read_save_to_buffer(idx,at_revLen[idx]);
+				at_revLen[idx] = 0;
+			}
+			if(at_state == at_statProcess){
+				specialAtState = true;
+				at_state = at_statIdle;
+			}
+		}
+	}
+	return 0;
+}
+
+int net_socket_mutiConn(int isMutiConn)
+{
+	//s_mutiConn = isMutiConn;
+//	serial_printf(" s_mutiConn=%d\n",s_mutiConn);
+}
+int get_socket_mutiConn(void)
+{
+	return 0;
+	//return s_mutiConn;
+}
+
+int net_socket_dinfo(int mode)
+{
+//	s_dinfo = mode;
+	serial_printf("\n net_socket_dinfo:%d \n",mode);
+}
+
+
+int get_tcpserver_timeout(void)
+{
+	if(s_tcpServerSocHd == -1)
+	{
+		serial_printf("\n tcp server not created\n");
+		return -1;
+	}
+	return s_timeout;
+
+}
+
+int set_tcpserver_timeout(int time)
+{
+	if(s_tcpServerSocHd == -1)
+	{
+		serial_printf("\n tcp server not created\n");
+		return -1;
+	}
+	s_timeout = time/1000;
+	setsockopt(s_tcpServerSocHd,SOL_SOCKET,SO_RCVTIMEO,(const char*)&time,sizeof(int));
+}
+
+int close_all_socket(void)
+{
+	int i = 0;
+	for (i = 0; i < MEMP_NUM_NETCONN; i++)	
+	{  
+		if (idev->s[i] != -1)  
+		{  
+			close_soctet(idev->s[i]);
+			idev->s[i] = -1;	
+		}  
+	} 
+	return 0;
+}
+void close_tcpserver(void)
+{
+	close_all_socket();
+	if(s_tcpServerSocHd != -1)
+	{
+		close_soctet( s_tcpServerSocHd );
+		s_tcpServerSocHd = -1;
+	}
+	serial_printf("<%s><%d>\n",__FUNCTION__,__LINE__);
+
+}
+
+uint8_t tcp_server_conn_amount(void){
+	uint8_t i;
+	for(i = 0; i < (MEMP_NUM_NETCONN - 1);i ++){
+		if(-1 == idev->s[i]){
+			break;
+		}
+	}
+	return i;
+}
+
+
+void  createTcpServer( void *arg )
+{
+#ifdef CONFIG_FREERTOS
+    struct sockaddr_in addr;
+	struct sockaddr_in client_addr; // connector's address information 
+    int bufferSize=0;
+    int new_fd=-1;	
+	int i = 0;
+	int ret = 0;
+    unsigned int sin_size;  
+	int tcp_port;
+	if(arg == NULL)
+	{
+		tcp_port = 6000;
+	}
+	else
+	{
+		tcp_port = *(int *)arg;
+	}
+	
+    s_tcpServerSocHd = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
+    if( s_tcpServerSocHd < 0 )
+    {
+        s_tcpServerSocHd = -1;
+        serial_printf("TCPServer socket create error\n");
+		goto exit;
+    }
+    bufferSize = TCPSOCKET_BUFFERSIZE;
+    setsockopt( s_tcpServerSocHd, SOL_SOCKET, SO_RCVBUF, &bufferSize, 4 );
+    setsockopt( s_tcpServerSocHd, SOL_SOCKET, SO_SNDBUF, &bufferSize, 4 );
+    memset(&addr, 0x0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(tcp_port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    if( bind( s_tcpServerSocHd, (struct sockaddr *)&addr, sizeof(addr)) == -1 )
+    {
+        serial_printf("TCPSrever socket bind error \n");
+        closesocket(s_tcpServerSocHd);
+        s_tcpServerSocHd = -1;
+		goto exit;
+
+    }
+
+    if(listen( s_tcpServerSocHd, MEMP_NUM_NETCONN - 1 ) != 0 )
+    {
+        serial_printf("TCPServer socket listen error! \n");
+        closesocket( s_tcpServerSocHd );
+        s_tcpServerSocHd = -1;
+		goto exit;
+
+    }
+    serial_printf("TCPServer listen %d\n",tcp_port);
+	fd_set fdsr;  
+    int maxsock;  
+    struct timeval tv; 
+    uint8_t conn_amount = 0;  
+    sin_size = sizeof(client_addr);  
+    maxsock = s_tcpServerSocHd;  	
+    for(;;)
+    {  
+		switch (tcpserver_sig) {
+		case TASK_INIT:
+			break;
+		case TASK_DOWN:
+			goto exit;
+		default:
+			break;
+		}
+		sys_msleep(100);	
+        // initialize file descriptor set  
+        FD_ZERO(&fdsr);  
+        FD_SET(s_tcpServerSocHd, &fdsr);  
+  
+        // timeout setting  
+        tv.tv_sec = 0;  
+        tv.tv_usec = 0;   
+        ret = select(maxsock + 1, &fdsr, NULL, NULL, &tv);  
+        if (ret < 0)  
+        {  
+            serial_printf("<%s><%d>ret:%d! \n",__FUNCTION__,__LINE__,ret);  
+            break;  
+        }  
+        else if (ret == 0)  
+        {    
+            continue;  
+        }  
+        // check whether a new connection comes  
+        if (FD_ISSET(s_tcpServerSocHd, &fdsr))  
+        {  
+            new_fd = accept(s_tcpServerSocHd, (struct sockaddr *)&client_addr, &sin_size);  
+            if (new_fd < 0)  
+            {    
+                continue;  
+            }  
+  
+            // add to fd queue
+            conn_amount = tcp_server_conn_amount();  
+            if (conn_amount < (MEMP_NUM_NETCONN - 1))  
+            {  
+                idev->s[conn_amount] = new_fd;  
+                serial_printf("new connection client[%d] %s:%d\n", conn_amount, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));  
+            }  
+            else  
+            {  
+            	closesocket(new_fd);
+                serial_printf("max connections arrive, exit\n");  
+            }  
+        }  
+
+    } 
+exit:	
+	close_tcpserver();
+	vTaskDelete(NULL);
+#endif	
+}
+
+
+/*
+void  create_tcp_rx( void *arg )
+{ 	
+#ifdef CONFIG_FREERTOS
+	int i = 0;
+	fd_set fdsr;   
+    struct timeval tv; 
+    int maxsock;  
+	int ret = 0;
+    for(;;){
+#if 0  
+		switch (tcprx_sig) {
+		case TASK_INIT:
+			break;
+		case TASK_DOWN:
+			goto exit;
+		default:
+			break;
+		}
+#else
+    	if(TASK_DOWN == tcprx_sig){
+    		goto exit;
+    	}
+#endif
+		//sys_msleep(100);
+		
+		FD_ZERO(&fdsr); 
+        tv.tv_sec = 10;  
+        tv.tv_usec = 0; 		
+        for (i = 0; i < MEMP_NUM_NETCONN; i++)  
+        {  
+            if (idev->s[i] == -1)  
+            {  
+                continue;
+            }  
+			FD_SET(idev->s[i], &fdsr); 
+			maxsock = idev->s[i]+1;
+        }
+		ret = select(maxsock, &fdsr, NULL, NULL, &tv); 
+        if (ret < 0)  
+        {  
+            serial_printf("<%s><%d>ret:%d! \n",__FUNCTION__,__LINE__,ret);  
+            break;  
+        }  
+        else if (ret == 0)  
+        {    
+            continue;  
+        } 
+        for (i = 0; i < MEMP_NUM_NETCONN; i++) 
+        {
+            if (FD_ISSET(idev->s[i], &fdsr))  
+            {  
+				net_socket_reveive(i,idev->s[i]); 
+            }  			
+        } 	
+    } 
+exit:	
+	vTaskDelete(NULL);
+#endif	
+}
+
+
+void tcp_rx_start()
+{
+#ifdef CONFIG_FREERTOS
+	if (tcprx_running){
+		return;
+	}
+	if (!xTaskCreate(create_tcp_rx, "tcp_rx", 4096, NULL, 5,NULL)) {
+		return;
+	}
+
+	tcprx_sig = TASK_INIT;
+	tcprx_running = 1;
+#endif	
+}
+*/
+
+
+void uart_net_port(void){
+#ifdef CONFIG_FREERTOS
+	int i = 0;
+	fd_set fdsr;   
+    struct timeval tv; 
+    int maxsock = -1;  
+	int ret = 0;
+    if(TASK_DOWN == tcprx_sig){
+    	return;
+    }
+#endif
+	FD_ZERO(&fdsr); 
+    tv.tv_sec = 0;  
+    tv.tv_usec = 0; 		
+    for (i = 0; i < MEMP_NUM_NETCONN; i++){
+    	if (idev->s[i] == -1)  
+        {  
+        	continue;
+        }
+        //serial_printf("%d idev:%d\n", i,idev->s[i]);
+		FD_SET(idev->s[i], &fdsr);
+		if(maxsock < idev->s[i]){
+			maxsock = idev->s[i];
+		}
+
+	}
+
+	ret = select(maxsock + 1, &fdsr, NULL, NULL, &tv); 
+
+	if (ret <= 0)  
+	{
+		return;  
+	} 
+	for (i = 0; i < MEMP_NUM_NETCONN; i++) 
+	{
+		//serial_printf("%d idev:%d\n", i,idev->s[i]);
+		if (idev->s[i] != -1 && FD_ISSET(idev->s[i], &fdsr))  
+		{  
+			//serial_printf("rev:%d\n", i);
+			net_socket_reveive(i,idev->s[i]);   			
+        }
+    }
+    return;
+}
+
+
+
+
+
+
+void tcp_rx_stop(void)
+{
+	int i = 0;
+	if (tcprx_running == 0){
+		return;
+	}
+	for (i = 0; i < MEMP_NUM_NETCONN; i++)
+	{
+		if (idev->s[i] != -1) 
+		{
+			return;
+		}
+	}
+
+	tcprx_sig = TASK_DOWN;
+	tcprx_running = 0;
+}
+
+
+void tcpserver_start(int *port)
+{
+#ifdef CONFIG_FREERTOS
+
+	if (tcpserver_running)
+		return;
+	if (!xTaskCreate(createTcpServer, "tcpCreate", 4096, (void*)port, 5,NULL)) {
+		return;
+	}
+
+	tcpserver_sig = TASK_INIT;
+	tcpserver_running = 1;
+#endif	
+}
+
+
+
+void tcpserver_stop(void)
+{
+	if (tcpserver_running == 0)
+		return;
+	tcpserver_sig = TASK_DOWN;
+	tcpserver_running = 0;
+}
+

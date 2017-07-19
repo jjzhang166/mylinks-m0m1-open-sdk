@@ -1,0 +1,560 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <event.h>
+#include <lynx_dev.h>
+#include <version.h>
+#include <cfg_api_new.h>
+#include "at_cmd.h"
+#include "at.h"
+//#include "at_ipcmd.h"
+#include "at_cmd_func.h"
+#include "user_config.h"
+#include "at_cmd_net.h"
+#include "portmacro.h"
+#if defined(CONFIG_FREERTOS)
+#include "FreeRTOSConfig.h"
+#include "FreeRTOS.h"
+#include "timers.h"
+#include "task.h"
+#include "semphr.h"
+#include "queue.h"
+#endif
+
+extern at_stateType  at_state;
+extern uint8_t sendingID;
+extern uint8_t specialAtState;
+extern uint8_t *net_rev_buf[];
+extern net_bufferCnt net_buffer_count[];
+extern uint8_t at_dataLine[];
+extern uint8_t *pDataLine;
+extern SemaphoreHandle_t sMutex;
+extern sdk_param g_atParam;
+extern char conStatus[];
+extern at_funcationType at_fun[];
+extern void at_sockasendCheck(void *arg);
+
+void lowers_to_uppers(uint8_t *data,uint8_t len){
+  uint8_t i;
+  for(i = 0;i < len;i++){
+    if(data[i] >='a' && data[i] <='z'){
+      data[i] = data[i] - 'a' + 'A';
+    }
+  }
+  return;
+}
+
+void net_rev_buf_free(void){
+  if(NULL!=net_rev_buf[0]){
+    free(net_rev_buf[0]);
+    net_rev_buf[0] = NULL;
+  }
+  if(NULL!=net_rev_buf[1]){
+    free(net_rev_buf[1]);
+    net_rev_buf[1] = NULL;
+  }	
+  return;
+}
+
+uint8_t check_transmission(uint8_t id){
+  if(at_state != at_statIpTraning)
+  {
+    if(id == (!!sendingID)){
+      return 1;
+    }else{
+      return 0;
+    }
+  }
+  return 1;
+}
+
+void del_all_loop_time(void){
+  del_timeout(at_sockasendCheck,0);
+  del_timeout(at_sockbsendCheck,0);
+  del_timeout(at_sockasendSet,0); 
+  return;
+}
+
+
+void at_ipDataSending(void){
+  int16_t len = 0;
+  uint8_t chn;
+  uint8_t temp[32];
+/*
+	if(at_state == at_statIpTraning){
+		if((3==(pDataLine - at_dataLine)) && !memcmp(at_dataLine,"+++",3)){
+			at_state = at_statIpTranout;
+			mylinks_add_timeout_fun(at_sockasendCheck, 3000);
+			uart0_sendStr("a");
+			return;			
+		}
+	}
+*/
+  len = (pDataLine - at_dataLine);
+  if(!len){
+    goto SEND_OVER;
+  }
+  xSemaphoreTake( sMutex, portMAX_DELAY );
+  if(check_transmission(0)){
+    //如果是TCP服务器模式
+    if((g_atParam.socka.type &(PORTO_TYPE|SERVER_TYPE)) == (TCP|SERVER)){
+      for(chn = 0;chn <(MEMP_NUM_NETCONN - 1);chn++){
+        if(net_socket_tx(chn,at_dataLine,len) < 0){
+          len = 0;
+        }
+      }
+    }else if(net_socket_tx(0,at_dataLine,len) < 0){
+        //uart0_sendStr("err");
+        len = 0;
+    }
+  }
+  if(check_transmission(1)){
+    if(net_socket_tx(MEMP_NUM_NETCONN - 1,at_dataLine,len) < 0){
+      len = 0;
+    }
+  }
+  xSemaphoreGive( sMutex );
+
+SEND_OVER:
+  if(at_state != at_statIpTraning){
+    specialAtState = true;
+    at_backOkHead;
+    sprintf(temp,"%d",len);
+    uart0_sendStr(temp);
+    at_backTail;
+    at_state = at_statIdle;
+  }else{
+    pDataLine = at_dataLine;
+  }
+  del_all_loop_time();
+  return;
+}
+
+
+void at_setupCmdNetp(uint8_t id,char *pPara)
+{
+  int8_t len;
+  uint8_t type = 0;
+  int32_t port;
+  uint32_t ip;
+  uint8_t temp[10];
+  uint8_t dns[DNS_BUF_LEN];
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if(len <= 0)
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  lowers_to_uppers(temp,len);
+  if(!strcmp(temp,"TCP"))
+  {
+    type |=TCP;
+  }else if(!strcmp(temp,"UDP"))
+  {
+    type |=UDP;
+  }else{
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  pPara += len + 1;
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if( len <= 0)
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  lowers_to_uppers(temp,len); 
+  if(!strcmp(temp,"CLIENT"))
+  {
+    type |= CLIENT;
+  }else if(!strcmp(temp,"SERVER"))
+  {
+    type |= SERVER;
+  }else{
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  pPara += len + 1;
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if( len <= 0 )
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  port = atoi(temp);
+  if(port<=0){
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  //80端口为内置web服务器
+  if(port == 80 && !(type & SERVER_TYPE)){
+    at_backOkHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return; 
+  }
+  pPara += len + 1;
+  len = at_dataStrCpy(dns,pPara,sizeof(dns));
+  if(len <= 0 )
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  ip = ipaddr_addr(dns);
+  if(ip == 0xffffffff)
+  {
+    if((type &SERVER_TYPE) == SERVER){
+      at_backErrHead;
+      uart0_sendStr("-5");
+      at_backTail;
+      return;
+    }
+    //此时是需要做广播了
+    if((type & PORTO_TYPE) == UDP && !memcmp(dns,"255.255.255.255",16)){
+      type |= NO_DNS;
+    }else{
+      type |= DNS_FLAG;
+    }
+  }else{
+    type |= NO_DNS;
+  }
+  if((type & DNS_TYPE) == DNS_FLAG){
+    //plink[0].remoteIp = 0;
+    //plink[0].remotePort = port;
+  }else{
+    //save_config.Ipaddr[0] = ip;
+  }
+  g_atParam.socka.type = type;
+  g_atParam.socka.port = port;
+  memcpy(g_atParam.socka.ip,dns,sizeof(dns));
+  at_backOk;
+  return;
+}
+
+
+
+void at_setupCmdSockb(uint8_t id,char *pPara){
+  int8_t len;
+  uint8_t type = 0;
+  int32_t port;
+  uint32_t ip;
+  uint8_t server_type;
+  uint8_t temp[10];
+  uint8_t dns[DNS_BUF_LEN];
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if(len <= 0)
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  lowers_to_uppers(temp,len);
+  if(!strcmp(temp,"TCP"))
+  {
+    type |=TCP;
+    type |=CLIENT;
+  }else if(!strcmp(temp,"UDPS")){
+    type |=UDP;
+    type |=SERVER;
+  }else if(!strcmp(temp,"UDP"))
+  {
+    type |=UDP;
+    type |=CLIENT;
+  }else if(!strcmp(temp,"NONE")){
+    g_atParam.sockb.enable = false;
+    at_backOk;
+    return;
+  }else{
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  g_atParam.sockb.enable = true;
+  pPara += len + 1;
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if(len <= 0)
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  port = atoi(temp);
+  if(port<=0){
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  pPara += len + 1;
+  len = qlz_dataStrCpy(dns,pPara,sizeof(dns));
+  if(len <= 0 )
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  ip = ipaddr_addr(dns);
+  if(ip == 0xffffffff)
+  {
+    if(!(type & SERVER_TYPE)){
+      at_backErrHead;
+      uart0_sendStr("-5");
+      at_backTail;
+      return;
+    }
+    //此时是需要做广播了
+    if((type & PORTO_TYPE) == UDP && !memcmp(dns,"255.255.255.255",16)){
+      type |= NO_DNS;
+    }else{
+      type |= DNS_FLAG;
+    }
+    //os_memcpy(save_config.dns_b,dns,sizeof(dns));
+  }else{
+    type |= NO_DNS;
+    //os_memset(save_config.dns_b,0,sizeof(save_config.dns_b));
+  }
+
+
+
+  if((type & DNS_TYPE) == DNS_FLAG){
+    //plink[0].remoteIp = 0;
+    //plink[0].remotePort = port;
+  }else{
+    //save_config.Ipaddr[0] = ip;
+  }
+  g_atParam.sockb.type = type;
+  g_atParam.sockb.port = port;
+  memcpy(g_atParam.sockb.ip,dns,sizeof(dns));
+  at_backOk;
+  return; 
+
+
+}
+
+
+void at_exeCmdNetp(uint8_t id)
+{
+  uint8_t temp[32];
+  at_backOkHead;
+  if(g_atParam.socka.type & PORTO_TYPE)
+  {
+    uart0_sendStr("UDP");
+  }else
+  {
+    uart0_sendStr("TCP");
+  }
+  uart0_sendStr(",");
+  if(g_atParam.socka.type & SERVER_TYPE)
+  {
+    uart0_sendStr("CLIENT");
+  }else
+  {
+    uart0_sendStr("SERVER"); 
+  }
+  uart0_sendStr(",");
+  sprintf(temp,"%d",g_atParam.socka.port);
+  uart0_sendStr(temp);
+  uart0_sendStr(",");
+  uart0_sendStr(g_atParam.socka.ip);
+  at_backTail;
+  return;
+}
+
+
+void at_exeCmdSockb(uint8_t id)
+{
+  uint8_t temp[32];
+  at_backOkHead;
+  if(g_atParam.sockb.enable == false){
+    uart0_sendStr("NONE");
+  }else{
+    if(!(g_atParam.sockb.type & PORTO_TYPE)){
+      uart0_sendStr("TCP");
+      //ip = plink[1].pCon->
+    }else{
+      uart0_sendStr("UDP");
+      if(!(g_atParam.sockb.type & SERVER_TYPE)){
+        uart0_sendStr("S");
+      }
+    }
+    uart0_sendStr(",");
+    sprintf(temp,"%d",g_atParam.sockb.port);
+    uart0_sendStr(temp);
+    uart0_sendStr(",");  
+    uart0_sendStr(g_atParam.sockb.ip);
+  }
+
+  at_backTail;
+  return;
+}
+
+
+void at_exeCmdTcplk(uint8_t id)
+{
+  uint8_t linkEn = false;
+  uint8_t chn = 0;
+  trans_param *s;
+  at_backOkHead;
+  
+  if(!memcmp(at_fun[id].at_cmdName,"TCPLKB",6))
+  {
+    chn = MEMP_NUM_NETCONN-1;
+    s = &g_atParam.sockb;
+  }else{
+    chn = 0;
+    s = &g_atParam.socka;    
+  }
+  if((s->type & SERVER_TYPE) && !(s->type & PORTO_TYPE))
+  {
+    if(conStatus[chn] == IPCONNECTD){
+      linkEn = true;
+    }
+  }
+
+  uart0_sendStr((linkEn == true)?"on":"off");
+  at_backTail;
+  return;
+}
+
+
+
+void at_setupCmdTcpdis(uint8_t id,char *pPara){
+  char temp[16];
+  int8_t len;
+  uint8_t chn;
+  trans_param *s;
+  if(!memcmp(at_fun[id].at_cmdName,"TCPDISB",7))
+  {
+    chn = 1;
+    s = &g_atParam.sockb;
+  }else{
+    chn = 0;
+    s = &g_atParam.socka;    
+  }
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  if(len <=0){
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  lowers_to_uppers(temp,len);
+  if(!strcmp(temp,"ON")){
+    len = MEMP_NUM_NETCONN-1;
+  }else if(!strcmp(temp,"OFF")){
+    len = 0;
+  }else{
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;   
+  }
+  if(!(s->type & SERVER_TYPE) || (s->type & PORTO_TYPE)){
+    at_backErrHead;
+    uart0_sendStr("-1");
+    at_backTail;
+    return;
+  }
+  if(len){
+#if 0
+    if(s->type & DNS_TYPE){
+      if(!(conStatus[chn] == IPCONNECTD ||conStatus[chn] == CONNECT)){
+        conStatus[chn] = DNS_CONNECT;
+      }
+    }else{
+      if(conStatus[chn] != IPCONNECTD){
+        conStatus[chn] = CONNECT;
+      }    
+    }
+#else
+    if(conStatus[chn] != IPCONNECTD){
+      conStatus[chn] = CONNECT;
+    }
+#endif
+  }else if(conStatus[chn]!=IPCLOSED){
+    conStatus[chn] = RECLOSE;
+  } 
+  at_backOk;
+  return;
+}
+
+
+
+void at_exeCmdTcpdis(uint8_t id){
+  uint8_t chn;
+  at_backOkHead;
+  chn = (!memcmp(at_fun[id].at_cmdName,"TCPLKB",6))?(MEMP_NUM_NETCONN-1):0;
+
+  if(conStatus[chn]== IPCONNECTD){
+    uart0_sendStr("on");
+  }else{
+    uart0_sendStr("off");
+  }
+  at_backTail;
+  return;
+}
+
+
+void at_setupCmdTcpto(uint8_t id,char *pPara)
+{
+  int8_t len;
+  uint8_t chn;
+  uint16_t timeout;
+  char temp[16];
+  trans_param *s;
+  if(!memcmp(at_fun[id].at_cmdName,"TCPTOB",6)){
+    chn = 1;
+    s = &g_atParam.sockb;
+  }else{ 
+    chn = 0;
+    s = &g_atParam.socka;
+  }
+  len = at_dataStrCpy(temp,pPara,sizeof(temp));
+  timeout = atoi(temp);
+  if(len <=0 || num_check(temp) || timeout < 0 ||timeout > 600)
+  {
+    at_backErrHead;
+    uart0_sendStr("-4");
+    at_backTail;
+    return;
+  }
+  s->time_alive = timeout;
+  at_backOk;
+  return;
+}
+
+
+void at_exeCmdTcpto(uint8_t id)
+{
+  char temp[32];
+  trans_param *s;
+  at_backOkHead;
+  s = (!memcmp(at_fun[id].at_cmdName,"TCPTOB",6))?&g_atParam.sockb:&g_atParam.socka;
+
+  sprintf(temp,"%d",s->time_alive);
+  uart0_sendStr(temp);
+  at_backTail;
+  return;
+}
+
+
+
+
+

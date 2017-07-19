@@ -1,0 +1,39 @@
+#ifndef __MINIFS_H
+#define __MINIFS_H
+
+#define MINFS_NAME "M0-MINIFS"
+#define NAME_MAX_LEN 32
+
+
+
+struct minifs_head
+{
+	//文件系统名
+	char name[16];
+	//文件系统生成的时间
+	uint32_t ctime;
+	//文件系统中文件的数量
+	uint32_t fils;
+	//文件系统版本
+	uint32_t version;
+	//未定义，将来使用
+	uint8_t TBD[8];
+};
+
+
+struct ftabs{
+	//文件名长度
+	uint16_t name_len;
+	//文件长度
+	uint32_t fil_len;
+	//文件相对起始位置
+	uint32_t fil_local;
+	//文件下一个块指向位置(目前不使用)
+	uint32_t fil_next;
+	//文件名称
+	char fname[NAME_MAX_LEN];
+};
+
+
+#endif
+
