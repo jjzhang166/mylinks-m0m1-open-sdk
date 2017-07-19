@@ -48,10 +48,7 @@
 #define UART_BAUD_RATE                      115200
 
 
-extern char conStatus[MEMP_NUM_NETCONN];
-const char *sw_build_time = (char *)SW_BUILD_TIME;
-const char *sw_build_sdk = (char *)MT_SDK_VER_STR;
-const int sw_build_count = SW_BUILD_COUNT;
+
 
 sdk_param g_atParam;
 
@@ -60,7 +57,7 @@ void at_exeCmdCtest(uint8_t id){
 }
 
 void at_setupCmdtest(uint8_t id, char *pPara){
-	
+
 }
 
 at_funType at_test[]={
@@ -137,5 +134,6 @@ void user_init(void){
 		//此函数必须存在
 		mylinks_gpio_proc();
 	}
+	return;
 }
 
