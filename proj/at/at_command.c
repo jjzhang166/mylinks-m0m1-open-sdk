@@ -16,7 +16,6 @@
 #include <stdint.h>
 #include <common.h>
 #include <flash_api.h>
-#include "lwip/sockets.h"
 #include <lynx_debug.h>
 #include <gpio.h>
 #include <serial.h>
