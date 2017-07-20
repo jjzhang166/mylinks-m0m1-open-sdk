@@ -1,5 +1,0 @@
-/*
-		built information
-*/
-#define SW_BUILD_TIME "Wed May 17 23:48:04 CST 2017"
-#define SW_BUILD_COUNT 742

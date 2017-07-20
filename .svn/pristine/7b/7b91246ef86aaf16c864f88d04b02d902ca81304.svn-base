@@ -1,7 +1,0 @@
-#ifndef __FSCONF_H
-#define __FSCONF_H
-
-#define VERSION 0x7001
-
-#endif
-
