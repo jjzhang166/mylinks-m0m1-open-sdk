@@ -118,7 +118,7 @@ void user_init(void){
 	//at_test:用户也自定义at指令
 	at_cmd_init(at_test);
 
-	//mount mini fs
+	//挂载mini文件系统
 	if(mfmount(FS1_FLASH_ADDR) == RES_OK){
 		//当连接AP时，可以通过下面的网页来打开内置网页
 		dnsserver_init("set.mqlinks.com");
@@ -132,10 +132,10 @@ void user_init(void){
 		//AT系统中两路socket的重连接
 		at_net_proc();
 #ifdef CONFIG_OMNICONFIG
-		//smartconfig成功后回复APP
+		//smartconfig成功后回复APP处理
 		omni_state_connecting();
 #endif
-		//tcp服务器超时断开未响应
+		//tcp服务器超时断开未响应处理
 		tcp_server_timeout_proc();
 		/*GPIO检测功能,当GPIO6按下后会进入smartconfig功能
 		  !注意:如果些函数不使用，需要用sys_msleep(100);来代替
