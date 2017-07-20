@@ -6,6 +6,10 @@
 *.ko
 *.obj
 *.elf
+*.img
+*im_header
+*app2
+*built_info.h
 
 # Linker output
 *.ilk
