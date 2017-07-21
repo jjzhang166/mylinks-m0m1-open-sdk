@@ -4,8 +4,8 @@
 extern void (*sta_start_func)(char *, char *,unsigned char *);
 extern void (*ap_start_func)(char *, char *, int);
 
-#define LVERSION "001 (2017-03-03 11:48 01A)"
-#define LVER "001"
+#define LVERSION "002 (2017-07-21 12:48 01B)"
+#define LVER "002"
 #define FWSZE   "141440,V15"
 
 #define VER_DEBUG 0 //用于演示
