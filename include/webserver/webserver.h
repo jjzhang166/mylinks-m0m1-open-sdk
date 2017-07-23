@@ -109,5 +109,8 @@ typedef struct php_funPostType
     int8_t (*php_exeCmd)(int client,webConn *conn);
 }php_funPostType;
 
+extern int8_t not_found(int client);
+extern int8_t post_not_found(int client,webConn *conn);
+
 #endif
 

@@ -1,11 +1,7 @@
+OBJS = main.o
+OBJS += at_command.o
+OBJS += php.o
 
-OBJS = at_command.o
-//OBJS += smartconfig.o
-#OBJS += app_init.o
-//OBJS = smartconfig_demo.o
-
-#OBJS += serial.o
-#OBJS += cfg_api.o
 
 -include appconf.mak
 -include $(TOPDIR)/.lib_config
