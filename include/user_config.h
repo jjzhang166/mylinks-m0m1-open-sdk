@@ -87,8 +87,18 @@ typedef enum
 {
 	STA_LINK_DOWN = 0,
 	STA_LINK_UP,
-	STA_LINK_GET_IP,	
+	STA_LINK_GET_IP,
+	STA_LINK_GODOWN,	
 }staStatus;
+
+typedef struct{
+	unsigned char led_sts:1;
+	unsigned char s_linkup:2;
+	unsigned char reset_wifi_flag:2;
+	unsigned char try_time:5;
+	unsigned char state:3;
+	unsigned char wifi_ready:1;
+}wifi_sys;
 
 #define AT_CMD_RX_BUFSIZE 64
 

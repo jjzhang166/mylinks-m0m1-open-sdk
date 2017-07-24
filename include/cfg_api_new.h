@@ -164,6 +164,8 @@ typedef struct
 
 
 
+
+
 typedef struct
 {
 	u16 check_sum;//用于判断配置文件是否正确

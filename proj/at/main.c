@@ -40,7 +40,6 @@
 
 #define UART0   0//Lynx UART1
 
-sdk_param g_atParam;
 extern const php_funcationType php_fun[];
 extern const php_funPostType post_php_fun[];
 extern at_funType at_test[];
