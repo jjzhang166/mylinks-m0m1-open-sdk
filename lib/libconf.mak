@@ -13,6 +13,7 @@ libdirs-$(CONFIG_AT_CMD_FUNC)	+= atcmd
 libdirs-$(CONFIG_WEBSERVER)	+= webserver
 libdirs-$(CONFIG_WLA) 	+= wla
 libdirs-$(CONFIG_OS)	+= os
+libdirs-$(CONFIG_MQTTC)	+= mqtt
 libdirs-$(CONFIG_LWIP)	+= lwip
 libdirs-$(CONFIG_DEV)	+= dev
 
