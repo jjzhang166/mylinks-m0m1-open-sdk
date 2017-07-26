@@ -40,11 +40,28 @@
 | Define                                                                       |
 +=============================================================================*/
 
-static Network n;
 
+
+/*----------------------------------------------------------------*/
+/**
+ * 此例中使用没有无SSL连接方式,请在查看代码前做以下工作:
+ * 将include文件夹中的“#define CONFIG_AXTLS 1”注释
+ * make lib，重新编译mqtt.a静态库
+ * make mqtt进行例程编译，生成mqtt.img文件
+ */
+/*----------------------------------------------------------------*/
+
+
+
+static Network n;
+static MQTTClient client;
 static char *testStr = "Only Test";
 
+static uint8_t sendbuf[1000];
+static uint8_t readbuf[1000];
 
+#define MYLINKS_SUB_TOPIC "mylinks/s"
+#define MYLINKS_PUB_TOPIC "mylinks/p"
 
 /*----------------------------------------------------------------*/
 /**
@@ -67,15 +84,7 @@ int app_main(void)
 }
 
 
-static void  mqttclient( void *arg )
-{
-	for(;;){
-		
-	}
-exit:
-    vTaskDelete(NULL);
-	return;
-}
+
 
 
 void uart_init(void)
@@ -92,7 +101,7 @@ void uart_init(void)
 
 }
 
-
+//串口接收回调函数
 void test_uart0_rev( void * arg){
 	uint8_t temp;
 	extern struct serial_buffer *ur0_rxbuf;
@@ -109,16 +118,140 @@ void test_uart0_rev( void * arg){
 	}
 }
 
+//接收数据回调函数
+void MQTT_recv_data(MessageData* md)
+{
+	MQTTMessage* message = md->message;
+	MQTTString * topicName = md->topicName;
+	int i;
+
+	if (strncmp(topicName->lenstring.data, MYLINKS_SUB_TOPIC, topicName->lenstring.len) == 0)
+	{
+		uart0_tx_buffer(message->payload,message->payloadlen);
+	}
+	return;
+}
+
+//发布数据函数
+int MQTT_send_data(void)
+{
+	int len;
+	MQTTMessage message;
+	len = strlen(testStr);
+	/* Send message */
+	message.payload = testStr;
+	message.payloadlen = len;
+
+	message.dup = 0;
+	message.qos = QOS1;
+	message.retained = 0;
+
+	return MQTTPublish(&client, MYLINKS_PUB_TOPIC, &message);
+}
+
+
+void MQTT_deinit(void)
+{
+	if (client.isconnected){
+		MQTTDisconnect(&client);
+	}
+	MQTTClientDeinit(&client);
+	FreeRTOS_closesocket(&n);
+	return;
+}
+
 
 int MQTT_init(void)
 {
 	int rc = 0;
 	FreeRTOS_NetworkInit(&n);
+	//只需要填写MQTT协议的服务器IP或者域名，端口号。
+	rc = FreeRTOS_NetworkConnect(&n, "app.mqlinks.com", 1883, 0, 0, 0, 0, 0, 0);
+	if (rc < 0) {
+		rc = FAILURE;
+		goto exit;
+	}
+	//注册MQTT发送和接收的缓存
+	MQTTClientInit(&client, &n, 2000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+	MQTTPacket_connectData data = MQTTPacket_connectData_initializer;
 
+	/***注意：这里请自行修改，以免与其它用户的ID号重命名***/
+	data.clientID.cstring = "mylinks_000001";
+	data.MQTTVersion = 3;
+	//MQTT服务存在账号和密码，填写账号和密码
+	data.username.cstring = "mylinks";
+	data.password.cstring = "mylinks_20160915";
+	//如果无账号密码。则使用NULL
+	//data.username.cstring = NULL;
+	//data.password.cstring = NULL;
+	data.keepAliveInterval = 30;//30s
+	data.cleansession = 1;
+	data.willFlag = 0;
+	data.will.topicName.cstring = "mylinks/will";
+	data.will.message.cstring = "mylinks will message";
+	data.will.retained = 0;
+	data.will.qos = 0;
+	//连接MQTT服务器
+	rc = MQTTConnect(&client, &data);
+	if (rc == FAILURE) {
+		goto exit;
+	}
+	//设置MQTT的订阅号以及订阅号的回调函数
+	rc = MQTTSubscribe(&client, MYLINKS_SUB_TOPIC, QOS1, MQTT_recv_data);
+	if (rc == FAILURE) {
+		goto exit;
+	}
+	return rc;
+exit:
+	MQTT_deinit();
 
 	return rc;
 }
 
+
+
+//MQTT处理任务
+static void  mqttclient( void *arg )
+{
+	int rc = FAILURE;
+	for(;;){
+
+		//等待STA获取IP地址
+		if(get_slinkup() != STA_LINK_GET_IP){
+			goto MQTT_ERR;
+		}
+		if(rc == FAILURE){
+			rc = MQTT_init();
+		}
+		//如果rc创建失败,则继续创建
+		if(rc == FAILURE){
+			goto MQTT_ERR;
+		}
+		//发送一个MQTT的数据
+		if(MQTT_send_data() < 0){
+			//用户可自行处理，这里为断开后再次连接
+			MQTT_deinit();
+			goto MQTT_ERR;
+		}
+
+		//MQTT keepactive 重连接处理等处理，用户可以不用理会此处设置延时1000ms
+		if (MQTTYield(&client, 1000) != FAILURE){
+			//用户可自行处理，这里为断开后再次连接
+			MQTT_deinit();
+			rc = -1;
+			continue;
+		}
+MQTT_ERR:
+		//此任务循环时间为100ms
+		sys_msleep(100);
+	}
+exit:
+    vTaskDelete(NULL);
+	return;
+}
+
+#define SSID "Mylinks"
+#define PWD	 "welcometomylinks"
 
 
 
@@ -131,14 +264,14 @@ void user_init(void){
 	wifi_set_opmode(OPMODE_STA);
 	//读取当前模块的STA配置信息
 	wifi_station_set_config(&s);
-	if(strcmp(s.ssid,"Mylinks") ||
-		strcmp(s.password,"welcometomylinks")){
+	if(strcmp(s.ssid,SSID) ||
+		strcmp(s.password,PWD)){
 
 		memset(&s,0,sizeof(s));
 		//设置连接的路由器ssid
-		strcpy(s.ssid,"Mylinks");
+		strcpy(s.ssid,SSID);
 		//设置连接的路由器密码
-		strcpy(s.password,"welcometomylinks");
+		strcpy(s.password,PWD);
 		wifi_station_set_config(&s);
 	}
 

@@ -10,10 +10,17 @@ struct station_config {
 
 
 
-bool wifi_station_get_config(struct station_config *config);
-bool wifi_station_set_config(struct station_config *config);
+extern bool wifi_station_get_config(struct station_config *config);
+extern bool wifi_station_set_config(struct station_config *config);
 
-bool wifi_station_connect (void);
-bool wifi_set_opmode(uint8_t opmode);
+extern bool wifi_station_connect (void);
+extern bool wifi_set_opmode(uint8_t opmode);
+
+
+
+
+//串口0输出
+extern void uart0_sendStr(char *str);
+extern void uart0_tx_buffer(const uint8_t *buf, uint16_t len);
 #endif
 

@@ -402,4 +402,5 @@ PROVIDE( rcons = 0x0007ca8c );
 PROVIDE( Td0 = 0x0007ca98 );
 PROVIDE( Td4s = 0x0007ce98 );
 PROVIDE( vsprintf = 0x00068498 );
+PROVIDE( sha256_compress = 0x00074e02 );
 

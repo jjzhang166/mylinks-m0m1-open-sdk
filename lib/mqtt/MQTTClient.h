@@ -40,7 +40,6 @@ extern "C" {
 //troy add to make it function aync
 #define MQTT_TASK
 
-#define printf serial_printf
 
 #if defined(MQTTCLIENT_PLATFORM_HEADER)
 /* The following sequence of macros converts the MQTTCLIENT_PLATFORM_HEADER value

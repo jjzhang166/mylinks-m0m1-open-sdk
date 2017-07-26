@@ -27,8 +27,7 @@
 #define CONFIG_DHCPC 1
 #define CONFIG_PING 1
 #define CONFIG_DNS 1
-#define CONFIG_AXTLS 1
-//#define CONFIG_WOLFSSL 1
+//#define CONFIG_AXTLS 1
 
 /*
  * Wireless LAN

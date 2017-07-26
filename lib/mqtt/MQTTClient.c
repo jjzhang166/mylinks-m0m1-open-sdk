@@ -14,6 +14,7 @@
  *    Allan Stockdill-Mander/Ian Craggs - initial API and implementation and/or initial documentation
  *******************************************************************************/
 #include "MQTTClient.h"
+#define printf(fmt,args...)
 
 static const char* MQTTPacket_names[] = {
 	"RESERVED", "CONNECT", "CONNACK", "PUBLISH", "PUBACK", "PUBREC", "PUBREL",
@@ -246,8 +247,7 @@ exit:
 	return rc;
 }
 
-#define print serial_printf
-#define printf serial_printf
+
 
 /*
 
