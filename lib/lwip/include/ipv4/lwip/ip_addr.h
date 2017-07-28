@@ -45,6 +45,13 @@ struct ip_addr {
   u32_t addr;
 };
 
+
+struct ip_info {
+    struct ip_addr ip;
+    struct ip_addr netmask;
+    struct ip_addr gw;
+};
+
 /* This is the packed version of ip_addr_t,
    used in network headers that are itself packed */
 #ifdef PACK_STRUCT_USE_INCLUDES
