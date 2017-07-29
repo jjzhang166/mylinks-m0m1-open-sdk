@@ -37,5 +37,12 @@ extern bool wifi_set_ip_info(uint8_t if_index,struct ip_info *info);
 //串口0输出
 extern void uart0_sendStr(char *str);
 extern void uart0_tx_buffer(const uint8_t *buf, uint16_t len);
+
+/*
+    if_index:STATION or SOFT_AP
+    macaddr: 6 bytes
+*/
+extern bool wifi_get_macaddr(uint8_t if_index,uint8_t *macaddr);
+extern bool wifi_set_macaddr(uint8_t if_index,uint8_t *macaddr);
 #endif
 
