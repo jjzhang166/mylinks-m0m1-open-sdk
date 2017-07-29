@@ -90,6 +90,7 @@ typedef struct
 	char enc;
 	char max_con;
 	char hidden_ssid;
+	unsigned short beacon_interval;// Note: support 100 ~ 60000 ms, default 100
 }softap_param;
 
 

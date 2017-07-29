@@ -89,10 +89,20 @@ void user_init(void){
 	uart_init();
 	//at_test:用户也自定义at指令
 	at_cmd_init(at_test);
-
 	//挂载mini文件系统
 	if(mfmount(FS1_FLASH_ADDR) == RES_OK){
-		//当连接AP时，可以通过下面的网页来打开内置网页
+		
+		//设置web服务器的登录账号
+		//注意：长度<=31
+		set_web_login("login");
+		//设置web服务器的密码
+		//注意：长度<=31
+		set_web_pwd("password");
+		/*如果设置web服务器登录无账号则为：
+			set_web_login("");
+			set_web_pwd("");
+		*/
+		//当连接AP时，可以通过下面的URL来打开内置网页
 		dnsserver_init("set.mqlinks.com");
 		//启动内置web服务器
 		webserver_init(php_fun,post_php_fun);

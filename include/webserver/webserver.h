@@ -111,6 +111,8 @@ typedef struct php_funPostType
 
 extern int8_t not_found(int client);
 extern int8_t post_not_found(int client,webConn *conn);
+extern void set_web_login(char *name);
+extern void set_web_pwd(char *pwd);
 
 #endif
 
