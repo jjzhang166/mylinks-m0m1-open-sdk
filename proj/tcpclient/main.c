@@ -189,29 +189,44 @@ void test_uart0_rev( void * arg){
 	}
 }
 
+#define STA_SSID "Mylinks"
+#define STA_PWD "welcometomylinks"
+
+#define AP_SSID "AP_Test"
+#define AP_PWD "TEST123456"
 
 
 
 void user_init(void){
-	struct station_config s;
+	struct station_config sta;
+	struct softap_config ap;
 	uart_init();
 	//注册一个串口0的接收任务进行数据接收
 	uart0_rev_register(test_uart0_rev);
-	//设置模块为STA工作模式
-	wifi_set_opmode(OPMODE_STA);
+	//设置模块为AP+STA工作模式
+	//wifi_set_opmode(OPMODE_STA);
+	wifi_set_opmode(OPMODE_APSTA);
 	//读取当前模块的STA配置信息
-	wifi_station_set_config(&s);
-	if(strcmp(s.ssid,"Mylinks") ||
-		strcmp(s.password,"welcometomylinks")){
+	wifi_station_set_config(&sta);
+	if(strcmp(sta.ssid,STA_SSID) ||
+		strcmp(sta.password,STA_PWD)){
 
-		memset(&s,0,sizeof(s));
+		memset(&sta,0,sizeof(sta));
 		//设置连接的路由器ssid
-		strcpy(s.ssid,"Mylinks");
+		strcpy(sta.ssid,STA_SSID);
 		//设置连接的路由器密码
-		strcpy(s.password,"welcometomylinks");
-		wifi_station_set_config(&s);
+		strcpy(sta.password,STA_PWD);
+		wifi_station_set_config(&sta);
 	}
-
+	wifi_softap_get_config(&ap);
+	memset(ap.ssid,0,32);
+	//设置连接的AP的ssid
+	strcpy(ap.ssid,AP_SSID);
+	//设置连接的AP的密码
+	memset(ap.password,0,64);
+	//如果不需要密码，以下不用设置
+	strcpy(ap.password,AP_PWD);
+	wifi_softap_set_config(&ap);
 	xTaskCreate(tcpclient, "client", TASK_HEAP_LEN, 0, 5, NULL);
 	return;
 }

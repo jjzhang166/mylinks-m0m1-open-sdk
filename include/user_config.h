@@ -100,9 +100,15 @@ typedef struct{
 	unsigned char wifi_ready:1;
 }wifi_sys;
 
+typedef enum
+{
+	UPDATE_SOFT_TYPE = 0,
+	UPDATE_WEB_TYPE = 1,
+}updateType;
+
 #define AT_CMD_RX_BUFSIZE 64
 
-#define LVERSTRING ".001"
+#define LVERSTRING ".003"
 
 
 typedef struct
