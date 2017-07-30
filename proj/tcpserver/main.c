@@ -99,7 +99,6 @@ static void  tcpserver( void *arg )
 
 		}
 		if(maxsock == -1){
-			sys_msleep(20);
 			continue;
 		}
 		
