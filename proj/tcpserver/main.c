@@ -79,8 +79,10 @@ static void  tcpserver( void *arg )
 	socklen_t socklen;
 	socklen = sizeof(struct sockaddr_in);
 	for(;;){
+		sys_msleep(20);
 		//清空监控标志位
-		FD_ZERO(&fdsr); 
+		FD_ZERO(&fdsr);
+		maxsock = -1; 
 		//设置read超时最大时间为1秒
 		tv.tv_sec = 1;  
 		tv.tv_usec = 0;
@@ -95,6 +97,10 @@ static void  tcpserver( void *arg )
 				maxsock = idev->s[i];
 			}
 
+		}
+		if(maxsock == -1){
+			sys_msleep(20);
+			continue;
 		}
 		
 		//开始超时监控
@@ -130,7 +136,6 @@ static void  tcpserver( void *arg )
 				}
 			}
 		}
-		sys_msleep(20);
 	}
 
     return;
