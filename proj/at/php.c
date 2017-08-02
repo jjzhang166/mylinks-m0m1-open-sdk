@@ -68,7 +68,7 @@ static int8_t get_systeminfo(int client){
 		free(buf);
 		return -1;
 	}
-	sprintf(buf,"%s."LVER"",sw_build_sdk);
+	sprintf(buf,"%s.%s",sw_build_sdk,get_at_lver());
 	//版本系统
 	cJSON_AddStringToObject(jsRet,"ver",buf);
 	//工作模式

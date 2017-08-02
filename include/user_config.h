@@ -4,9 +4,6 @@
 extern void (*sta_start_func)(char *, char *,unsigned char *);
 extern void (*ap_start_func)(char *, char *, int);
 
-#define LVERSION "002 (2017-07-21 12:48 01B)"
-#define LVER "002"
-#define FWSZE   "141440,V15"
 
 #define VER_DEBUG 0 //用于演示
 
@@ -98,6 +95,7 @@ typedef struct{
 	unsigned char try_time:5;
 	unsigned char state:3;
 	unsigned char wifi_ready:1;
+	unsigned char smart_ready:1;
 }wifi_sys;
 
 typedef enum
