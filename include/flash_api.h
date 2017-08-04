@@ -47,6 +47,8 @@ struct flash_dev_tab
 #define FLASH_OTA_LENGTH     0x60000
 #define USER_PARAM_FLASH_PART       0xE0000
 #define USER_PARAM_FLASH_LENGTH       0x10000 // 64k bytes
+#define WEB_PARAM_FLASH_PARAT   USER_PARAM_FLASH_PART
+#define WEB_PARAM_FLASH_LENGTH  USER_PARAM_FLASH_LENGTH
 
 
 int flash_erase (unsigned int addr, unsigned int len);
