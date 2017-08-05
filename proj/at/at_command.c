@@ -53,7 +53,7 @@ void at_exeCmdCupdate(uint8_t id){
 	char *buffer = NULL;
 	//当路由器连接失败，则返回+ERR=-5
 	if(STA_LINK_GET_IP != get_slinkup()){
-		at_backOkHead;
+		at_backErrHead;
 		uart0_sendStr("-5");
 		at_backTail;
 		return;		
@@ -92,7 +92,7 @@ UPERR:
 void at_setupCmdCupdate(uint8_t id,char *pPara){
 	char type;
 	if(STA_LINK_GET_IP != get_slinkup()){
-		at_backOkHead;
+		at_backErrHead;
 		uart0_sendStr("-5");
 		at_backTail;
 		return;		
