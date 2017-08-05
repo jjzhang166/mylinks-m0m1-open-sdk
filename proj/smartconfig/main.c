@@ -97,6 +97,10 @@ static void  tcpclient( void *arg )
 	struct timeval tv;
 	fd_set fdsr;
 	buf = (uint8_t *)malloc(256);
+	while(get_slinkup() != STA_LINK_GET_IP){
+		sys_msleep(50);
+	}
+	uart0_sendStr("connectd\r\n");
 
 	for(;;){
 		//此任务循环时间为50ms
