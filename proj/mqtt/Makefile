@@ -1,6 +1,6 @@
 
 OBJS = main.o
-#OBJS += ssl.o
+OBJS += ssl.o
 
 -include appconf.mak
 -include $(TOPDIR)/.lib_config
@@ -11,6 +11,8 @@ EXTRA_CFLAGS = -I$(TOPDIR)/include -include $(TOPDIR)/include/lib_autoconf.h -DC
 EXTRA_CFLAGS += -I$(TOPDIR)/lib/mqtt
 EXTRA_CFLAGS += -I$(TOPDIR)/lib/axtls/ssl -I$(TOPDIR)/lib/axtls/config -I$(TOPDIR)/lib/axtls/crypto
 LIBS += $(LIBPATH)/mqtt.a
+LIBS += $(LIBPATH)/axtls.a
+LIBS += $(LIBPATH)/minifs.a
 LIBS += $(LIBPATH)/sys.a
 LIBS += $(LIBPATH)/libmain.a
 
