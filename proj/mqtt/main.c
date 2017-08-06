@@ -235,10 +235,10 @@ static void  mqttclient( void *arg )
 		}
 
 		//MQTT keepactive 重连接处理等处理，用户可以不用理会此处设置延时1000ms
-		if (MQTTYield(&client, 1000) != FAILURE){
+		if (MQTTYield(&client, 1000) == FAILURE){
 			//用户可自行处理，这里为断开后再次连接
 			MQTT_deinit();
-			rc = -1;
+			rc = FAILURE;
 			continue;
 		}
 MQTT_ERR:
@@ -250,8 +250,8 @@ exit:
 	return;
 }
 
-#define SSID "Mylinks"
-#define PWD	 "welcometomylinks"
+#define SSID "amily"
+#define PWD	 "xu841007"
 
 
 
