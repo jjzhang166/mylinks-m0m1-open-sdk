@@ -7,7 +7,7 @@
 /*! 
 *   \file app_init.c
 *   \brief main entry
-*   \author Montage
+*   \author Mylinks
 */
 
 /*=============================================================================+
