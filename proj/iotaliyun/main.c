@@ -69,6 +69,10 @@
 
 #define IOTALIYUN_ADDR		 ""PRODUCT_KEY".iot-as-mqtt.cn-shanghai.aliyuncs.com"
 
+
+static uint8_t mqttbuf[1024];
+static uint8_t *pbuf = mqttbuf;
+static int rc = FAILURE;
 /*----------------------------------------------------------------*/
 /**
  * The function is called once application start-up. Users can initial
@@ -107,23 +111,6 @@ void uart_init(void)
 
 }
 
-//串口接收回调函数
-void test_uart0_rev( void * arg){
-	uint8_t temp;
-	extern struct serial_buffer *ur0_rxbuf;
-	for(;;){
-		//等待串口是否有数据传入
-		if(0 != uart_recv_sem_wait(portMAX_DELAY)){
-			continue;
-		}
-		//判断串口数据是否为空
-		while(serial_buffer_empty(ur0_rxbuf)){
-			//读取一个字节的串口数据
-			temp = serial_buffer_getchar(ur0_rxbuf);
-		}
-	}
-}
-
 //接收数据回调函数
 void IOTAliyunRecvData(MessageData* md)
 {
@@ -144,9 +131,12 @@ int IOTAliyunSendData(void)
 
 	MQTTMessage message;
 	/* Send message */
-	message.payload = TESTSTR;
-	message.payloadlen = strlen(TESTSTR);
 
+	message.payloadlen = pbuf - mqttbuf;
+	if(!message.payloadlen){
+		return SUCCESS;
+	}
+	message.payload = mqttbuf;	
 	message.dup = 0;
 	message.qos = QOS1;
 	message.retained = 0;
@@ -156,6 +146,43 @@ int IOTAliyunSendData(void)
 
 
 
+void UartTimeoutSendMqttSendData(void *arg){
+	if(rc != FAILURE && (IOTAliyunSendData() < 0)){
+		IOTAliyunDeinit();
+		rc = FAILURE;
+	}
+	pbuf = mqttbuf;
+	return;
+}
+
+
+//串口接收回调函数
+void test_uart0_rev( void * arg){
+	uint8_t temp;
+	extern struct serial_buffer *ur0_rxbuf;
+	for(;;){
+		//等待串口是否有数据传入
+		if(0 != uart_recv_sem_wait(portMAX_DELAY)){
+			continue;
+		}
+		del_timeout(UartTimeoutSendMqttSendData,0);
+		//判断串口数据是否为空
+		while(serial_buffer_empty(ur0_rxbuf)){
+			//读取一个字节的串口数据
+			*pbuf++ = serial_buffer_getchar(ur0_rxbuf);
+			if((pbuf - mqttbuf) >= sizeof(mqttbuf)){
+
+				if(rc != FAILURE && (IOTAliyunSendData() < 0)){
+					IOTAliyunDeinit();
+					rc = FAILURE;
+				}
+				pbuf = mqttbuf;
+			}
+		}
+		//两个串口之间接收到的时间间隔为30ms时,则再时发送MQTT协议的数据
+		add_timeout(UartTimeoutSendMqttSendData, 0, 30);
+	}
+}
 
 
 
@@ -163,7 +190,7 @@ int IOTAliyunSendData(void)
 //MQTT处理任务
 static void  iotaliunclient( void *arg )
 {
-	int rc = FAILURE;
+
 	for(;;){
 
 		//等待STA获取IP地址

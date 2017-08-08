@@ -63,8 +63,14 @@ static Network n;
 static MQTTClient client;
 static char *testStr = "Only Test";
 
-static uint8_t sendbuf[1000];
-static uint8_t readbuf[1000];
+static uint8_t sendbuf[1024];
+static uint8_t readbuf[1024];
+
+static uint8_t mqttbuf[1024];
+static uint8_t *pbuf = mqttbuf;
+
+
+static int rc = FAILURE;
 
 #define MYLINKS_SUB_TOPIC "mylinks/s"
 #define MYLINKS_PUB_TOPIC "mylinks/p"
@@ -91,8 +97,6 @@ int app_main(void)
 
 
 
-
-
 void uart_init(void)
 {
 	/*
@@ -107,20 +111,70 @@ void uart_init(void)
 
 }
 
+void MQTT_deinit(void)
+{
+	if (client.isconnected){
+		MQTTDisconnect(&client);
+	}
+	MQTTClientDeinit(&client);
+	FreeRTOS_closesocket(&n);
+	return;
+}
+
+
+//发布数据函数
+int MQTT_send_data(void)
+{
+
+	MQTTMessage message;
+	/* Send message */
+	message.payloadlen = pbuf - mqttbuf;
+	if(!message.payloadlen){
+		return SUCCESS;
+	}
+
+	message.payload = mqttbuf;
+	message.dup = 0;
+	message.qos = QOS1;
+	message.retained = 0;
+	return MQTTPublish(&client, MYLINKS_PUB_TOPIC, &message);
+}
+
+
+void UartTimeoutSendMqttSendData(void *arg){
+	if(rc != FAILURE && (MQTT_send_data() < 0)){
+		MQTT_deinit();
+		rc = FAILURE;
+	}
+	pbuf = mqttbuf;
+	return;
+}
+
 //串口接收回调函数
 void test_uart0_rev( void * arg){
-	uint8_t temp;
+	//uint8_t temp;
 	extern struct serial_buffer *ur0_rxbuf;
 	for(;;){
 		//等待串口是否有数据传入
 		if(0 != uart_recv_sem_wait(portMAX_DELAY)){
 			continue;
 		}
+		del_timeout(UartTimeoutSendMqttSendData,0);
 		//判断串口数据是否为空
 		while(serial_buffer_empty(ur0_rxbuf)){
 			//读取一个字节的串口数据
-			temp = serial_buffer_getchar(ur0_rxbuf);
+			*pbuf++ = serial_buffer_getchar(ur0_rxbuf);
+			if((pbuf - mqttbuf) >= sizeof(mqttbuf)){
+
+				if(rc != FAILURE && (MQTT_send_data() < 0)){
+					MQTT_deinit();
+					rc = FAILURE;
+				}
+				pbuf = mqttbuf;
+			}
 		}
+		//两个串口之间接收到的时间间隔为30ms时,则再时发送MQTT协议的数据
+		add_timeout(UartTimeoutSendMqttSendData, 0, 30);
 	}
 }
 
@@ -138,33 +192,8 @@ void MQTT_recv_data(MessageData* md)
 	return;
 }
 
-//发布数据函数
-int MQTT_send_data(void)
-{
-	int len;
-	MQTTMessage message;
-	len = strlen(testStr);
-	/* Send message */
-	message.payload = testStr;
-	message.payloadlen = len;
-
-	message.dup = 0;
-	message.qos = QOS1;
-	message.retained = 0;
-
-	return MQTTPublish(&client, MYLINKS_PUB_TOPIC, &message);
-}
 
 
-void MQTT_deinit(void)
-{
-	if (client.isconnected){
-		MQTTDisconnect(&client);
-	}
-	MQTTClientDeinit(&client);
-	FreeRTOS_closesocket(&n);
-	return;
-}
 
 
 int MQTT_init(void)
@@ -250,7 +279,6 @@ exit:
 //MQTT处理任务
 static void  mqttclient( void *arg )
 {
-	int rc = FAILURE;
 	for(;;){
 
 		//等待STA获取IP地址
@@ -264,13 +292,14 @@ static void  mqttclient( void *arg )
 		if(rc == FAILURE){
 			goto MQTT_ERR;
 		}
+#if 0
 		//发送一个MQTT的数据
 		if(MQTT_send_data() < 0){
 			//用户可自行处理，这里为断开后再次连接
 			MQTT_deinit();
 			goto MQTT_ERR;
 		}
-
+#endif
 		//MQTT keepactive 重连接处理等处理，用户可以不用理会此处设置延时1000ms
 		if (MQTTYield(&client, 1000) == FAILURE){
 			//用户可自行处理，这里为断开后再次连接
