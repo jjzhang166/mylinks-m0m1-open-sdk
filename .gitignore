@@ -44,6 +44,7 @@
 *.su
 *.idb
 *.pdb
+.gitignore
 
 # Kernel Module Compile Results
 *.mod*
@@ -52,3 +53,16 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+lib/atcmd/
+lib/freertos/
+lib/iotaliyun/
+lib/libmain/
+lib/libatmain/
+lib/lwip/
+lib/minifs/
+lib/webserver/
+lib/libprojmain.a
+lib/libconf.mak
+
+
+
