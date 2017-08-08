@@ -56,9 +56,9 @@
 
 #define TESTSTR "Hello,IOT Aliyun"
 //The product and device information from IOT console
-#define PRODUCT_KEY         "************"
-#define DEVICE_NAME         "************"
-#define DEVICE_SECRET       "************"
+#define PRODUCT_KEY         "7MAqltJKJYR"
+#define DEVICE_NAME         "M0M1_123456"
+#define DEVICE_SECRET       "e6HPIjeD3QQsHTBYms1CSx8uieXjfKXe"
 #define KEEPALIVE	180
 
 
@@ -207,6 +207,10 @@ static void  iotaliunclient( void *arg )
 			continue;
 		}
 ALIYUN_ERR:
+		if(rc != FAILURE){
+			rc =  FAILURE;
+			IOTAliyunDeinit();
+		}
 		//此任务循环时间为500ms
 		sys_msleep(500);
 	}

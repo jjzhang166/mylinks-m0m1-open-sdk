@@ -279,8 +279,12 @@ static void  mqttclient( void *arg )
 			continue;
 		}
 MQTT_ERR:
-		//此任务循环时间为100ms
-		sys_msleep(100);
+		if(rc != FAILURE){
+			rc =  FAILURE;
+			MQTT_deinit();
+		}
+		//此任务循环时间为500ms
+		sys_msleep(500);
 	}
 exit:
     vTaskDelete(NULL);
