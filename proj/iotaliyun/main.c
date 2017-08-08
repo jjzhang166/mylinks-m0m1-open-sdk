@@ -56,9 +56,9 @@
 
 #define TESTSTR "Hello,IOT Aliyun"
 //The product and device information from IOT console
-#define PRODUCT_KEY         "7MAqltJKJYR"
-#define DEVICE_NAME         "M0M1_123456"
-#define DEVICE_SECRET       "e6HPIjeD3QQsHTBYms1CSx8uieXjfKXe"
+#define PRODUCT_KEY         "************"
+#define DEVICE_NAME         "************"
+#define DEVICE_SECRET       "************"
 #define KEEPALIVE	180
 
 
