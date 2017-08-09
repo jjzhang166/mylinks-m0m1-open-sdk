@@ -56,9 +56,9 @@
 
 #define TESTSTR "Hello,IOT Aliyun"
 //The product and device information from IOT console
-#define PRODUCT_KEY         "************"
-#define DEVICE_NAME         "************"
-#define DEVICE_SECRET       "************"
+#define PRODUCT_KEY         "****************"
+#define DEVICE_NAME         "****************"
+#define DEVICE_SECRET       "****************"
 #define KEEPALIVE	180
 
 
@@ -72,7 +72,8 @@
 
 static uint8_t mqttbuf[1024];
 static uint8_t *pbuf = mqttbuf;
-static int rc = FAILURE;
+static 	int rc = FAILURE;
+SemaphoreHandle_t mqtt_rx = NULL;
 /*----------------------------------------------------------------*/
 /**
  * The function is called once application start-up. Users can initial
@@ -147,11 +148,7 @@ int IOTAliyunSendData(void)
 
 
 void UartTimeoutSendMqttSendData(void *arg){
-	if(rc != FAILURE && (IOTAliyunSendData() < 0)){
-		IOTAliyunDeinit();
-		rc = FAILURE;
-	}
-	pbuf = mqttbuf;
+	xSemaphoreGive(mqtt_rx);
 	return;
 }
 
@@ -165,18 +162,16 @@ void test_uart0_rev( void * arg){
 		if(0 != uart_recv_sem_wait(portMAX_DELAY)){
 			continue;
 		}
-		del_timeout(UartTimeoutSendMqttSendData,0);
+//		del_timeout(UartTimeoutSendMqttSendData,0);
 		//判断串口数据是否为空
 		while(serial_buffer_empty(ur0_rxbuf)){
 			//读取一个字节的串口数据
-			*pbuf++ = serial_buffer_getchar(ur0_rxbuf);
-			if((pbuf - mqttbuf) >= sizeof(mqttbuf)){
-
-				if(rc != FAILURE && (IOTAliyunSendData() < 0)){
-					IOTAliyunDeinit();
-					rc = FAILURE;
+			temp = serial_buffer_getchar(ur0_rxbuf);
+			if((pbuf - mqttbuf) < sizeof(mqttbuf)){
+				*pbuf++ = temp;
+				if((pbuf - mqttbuf) == sizeof(mqttbuf)){
+					xSemaphoreGive(mqtt_rx);
 				}
-				pbuf = mqttbuf;
 			}
 		}
 		//两个串口之间接收到的时间间隔为30ms时,则再时发送MQTT协议的数据
@@ -190,7 +185,6 @@ void test_uart0_rev( void * arg){
 //MQTT处理任务
 static void  iotaliunclient( void *arg )
 {
-
 	for(;;){
 
 		//等待STA获取IP地址
@@ -216,23 +210,31 @@ static void  iotaliunclient( void *arg )
 				}
 			}			
 		}
-
+#if 1
 		//向Aliyun物联网套件发送数据
-#if 0
-		if(IOTAliyunSendData() < 0){
-			//用户可自行处理，这里为断开后再次连接
-			IOTAliyunDeinit();
-			goto ALIYUN_ERR;
+		if(xSemaphoreTake(mqtt_rx, 0) == pdTRUE)
+		{
+			//发送一个MQTT的数据
+			if(IOTAliyunSendData() < 0){
+				//用户可自行处理，这里为断开后再次连接
+				IOTAliyunDeinit();
+				pbuf = mqttbuf;
+				goto ALIYUN_ERR;
+			}
+			pbuf = mqttbuf;
 		}
 #endif
+		
+
 		//Aliyun物联网套件 keepactive 重连接处理等处理，用户可以不用理会此处设置延时1000ms
-		rc = IOTAliyunYield(1000);
+		rc = IOTAliyunYield(10);
+
 		if (rc == FAILURE){
 			uart0_sendStr("IOTAliyun yield fail\r\n");
 			//用户可自行处理，这里为断开后再次连接
 			IOTAliyunDeinit();
-			continue;
 		}
+		continue;
 ALIYUN_ERR:
 		if(rc != FAILURE){
 			rc =  FAILURE;
@@ -267,6 +269,8 @@ void user_init(void){
 		strcpy(s.password,PWD);
 		wifi_station_set_config(&s);
 	}
+	mqtt_rx = xSemaphoreCreateBinary();
+	xSemaphoreTake(mqtt_rx, (TickType_t)10);
 	IOTAliyunDataInit(PRODUCT_KEY,DEVICE_NAME,DEVICE_SECRET,KEEPALIVE);
 	xTaskCreate(iotaliunclient, "iotaliyun", TASK_HEAP_LEN, 0, 5, NULL);
 	return;

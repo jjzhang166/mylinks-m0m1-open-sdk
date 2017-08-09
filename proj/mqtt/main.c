@@ -43,7 +43,7 @@
 | Define                                                                       |
 +=============================================================================*/
 
-
+SemaphoreHandle_t mqtt_rx = NULL;
 
 /*----------------------------------------------------------------*/
 /**
@@ -74,6 +74,9 @@ static int rc = FAILURE;
 
 #define MYLINKS_SUB_TOPIC "mylinks/s"
 #define MYLINKS_PUB_TOPIC "mylinks/p"
+
+#define SSID "Mylinks"
+#define PWD	 "welcometomylinks"
 
 /*----------------------------------------------------------------*/
 /**
@@ -142,35 +145,30 @@ int MQTT_send_data(void)
 
 
 void UartTimeoutSendMqttSendData(void *arg){
-	if(rc != FAILURE && (MQTT_send_data() < 0)){
-		MQTT_deinit();
-		rc = FAILURE;
-	}
-	pbuf = mqttbuf;
+	xSemaphoreGive(mqtt_rx);
 	return;
 }
 
 //串口接收回调函数
 void test_uart0_rev( void * arg){
-	//uint8_t temp;
+	uint8_t temp;
 	extern struct serial_buffer *ur0_rxbuf;
 	for(;;){
 		//等待串口是否有数据传入
 		if(0 != uart_recv_sem_wait(portMAX_DELAY)){
 			continue;
 		}
+		
 		del_timeout(UartTimeoutSendMqttSendData,0);
 		//判断串口数据是否为空
 		while(serial_buffer_empty(ur0_rxbuf)){
 			//读取一个字节的串口数据
-			*pbuf++ = serial_buffer_getchar(ur0_rxbuf);
-			if((pbuf - mqttbuf) >= sizeof(mqttbuf)){
-
-				if(rc != FAILURE && (MQTT_send_data() < 0)){
-					MQTT_deinit();
-					rc = FAILURE;
+			temp = serial_buffer_getchar(ur0_rxbuf);
+			if((pbuf - mqttbuf) < sizeof(mqttbuf)){
+				*pbuf++ = temp;
+				if((pbuf - mqttbuf) == sizeof(mqttbuf)){
+					xSemaphoreGive(mqtt_rx);
 				}
-				pbuf = mqttbuf;
 			}
 		}
 		//两个串口之间接收到的时间间隔为30ms时,则再时发送MQTT协议的数据
@@ -292,21 +290,26 @@ static void  mqttclient( void *arg )
 		if(rc == FAILURE){
 			goto MQTT_ERR;
 		}
-#if 0
-		//发送一个MQTT的数据
-		if(MQTT_send_data() < 0){
-			//用户可自行处理，这里为断开后再次连接
-			MQTT_deinit();
-			goto MQTT_ERR;
+#if 1
+		if(xSemaphoreTake(mqtt_rx, 0) == pdTRUE)
+		{
+			//发送一个MQTT的数据
+			if(MQTT_send_data() < 0){
+				//用户可自行处理，这里为断开后再次连接
+				MQTT_deinit();
+				pbuf = mqttbuf;
+				goto MQTT_ERR;
+			}
+			pbuf = mqttbuf;
 		}
 #endif
 		//MQTT keepactive 重连接处理等处理，用户可以不用理会此处设置延时1000ms
-		if (MQTTYield(&client, 1000) == FAILURE){
+		rc = MQTTYield(&client, 10);
+		if (rc == FAILURE){
 			//用户可自行处理，这里为断开后再次连接
 			MQTT_deinit();
-			rc = FAILURE;
-			continue;
 		}
+		continue;
 MQTT_ERR:
 		if(rc != FAILURE){
 			rc =  FAILURE;
@@ -320,8 +323,7 @@ exit:
 	return;
 }
 
-#define SSID "mylinks"
-#define PWD	 "welcometomylinks"
+
 
 
 
@@ -348,6 +350,8 @@ void user_init(void){
 	//当使用tls连接的时候，使用使用mini文件系统保存认证文件
 	mfmount(FS1_FLASH_ADDR);
 #endif
+	mqtt_rx = xSemaphoreCreateBinary();
+	xSemaphoreTake(mqtt_rx, (TickType_t)10);
 	xTaskCreate(mqttclient, "mqtt", TASK_HEAP_LEN, 0, 5, NULL);
 	return;
 }
