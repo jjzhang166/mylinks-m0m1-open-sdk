@@ -54,6 +54,7 @@ make at
 6.smartconfig:Smartconfig例程
 7.at:AT指令集+内置WEB服务器+内置网页HTML5和JS
 8.sntp:网络同步时间例程
+9.httpget:HTTP连接使用GET方式提取数据
 ```
 
 
