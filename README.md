@@ -2,19 +2,28 @@
 
 ----------
 
-
    
 ### 环境
 - 基于 `FreeRTOS` 的 M0M1系列 SDK开发包。
 - 'VMware安装包'[下载](http://pan.baidu.com/s/1eRHmoJC)
-- `linux:ubuntu-14.0.4`[iso](http://pan.baidu.com/s/1kUAWzKr)[安装版.7z](https://pan.baidu.com/s/1kUKzQuj)
-- 编译器:[toolchain](https://pan.baidu.com/s/1qY7EEp2)
+- `linux:ubuntu-14.0.4`:[iso](http://pan.baidu.com/s/1kUAWzKr)[安装版.7z](https://pan.baidu.com/s/1kUKzQuj)
+- 编译器:[toolchain下载](https://pan.baidu.com/s/1qY7EEp2)
 - 更多的信息请关注 [M0M1系列sdk更改记录](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/wikis/M0M1系列sdk更改记录) !
 
 ### 项目
-*mylinks-m0m1-open-sdk
-
-
+```
+mylinks-m0m1-open-sdk            -------项目主目录
+    images                       -------烧写文件生成目录
+    include                      -------头文件
+    lib                          -------库
+        axtls                    -------小型的SSL开源库
+        cJSON                    -------JSON开源库
+        mqtt                     -------mqtt client开源库
+        
+    proj                         -------用户项目
+    utility                      
+toolchain                        -------编译器解压目录
+```
 
   
 ## 编译 ##
@@ -58,5 +67,3 @@ make at
 8.sntp:网络同步时间例程
 9.httpget:HTTP连接使用GET方式提取数据
 ```
-
-
