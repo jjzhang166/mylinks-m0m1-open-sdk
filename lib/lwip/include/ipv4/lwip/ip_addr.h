@@ -52,6 +52,26 @@ struct ip_info {
     struct ip_addr gw;
 };
 
+
+/* Get one byte from the 4-byte address */
+#define ip4_addr1(ipaddr) (((u8_t*)(ipaddr))[0])
+#define ip4_addr2(ipaddr) (((u8_t*)(ipaddr))[1])
+#define ip4_addr3(ipaddr) (((u8_t*)(ipaddr))[2])
+#define ip4_addr4(ipaddr) (((u8_t*)(ipaddr))[3])
+/* These are cast to u16_t, with the intent that they are often arguments
+ * to printf using the U16_F format from cc.h. */
+#define ip4_addr1_16(ipaddr) ((u16_t)ip4_addr1(ipaddr))
+#define ip4_addr2_16(ipaddr) ((u16_t)ip4_addr2(ipaddr))
+#define ip4_addr3_16(ipaddr) ((u16_t)ip4_addr3(ipaddr))
+#define ip4_addr4_16(ipaddr) ((u16_t)ip4_addr4(ipaddr))
+
+#define IP2STR(ipaddr) ip4_addr1_16(ipaddr), \
+    ip4_addr2_16(ipaddr), \
+    ip4_addr3_16(ipaddr), \
+    ip4_addr4_16(ipaddr)
+
+#define IPSTR "%d.%d.%d.%d"
+
 /* This is the packed version of ip_addr_t,
    used in network headers that are itself packed */
 #ifdef PACK_STRUCT_USE_INCLUDES
