@@ -6,6 +6,7 @@
 - linux`lubuntu-14.0.4`:[[iso](http://pan.baidu.com/s/1kUAWzKr)]|[[VMware安装压缩包](https://pan.baidu.com/s/1kUKzQuj)]
 - 编译器`toolchain`:[[下载](https://pan.baidu.com/s/1qY7EEp2)]
 - 固件下载工具`MylinkDownloadTool.exe`:[[下载](http://pan.baidu.com/s/1mi9jBlQ)]
+- 相关技术文档:[[下载](http://www.mqlinks.com/wiki/doku.php?id=m0m100d0 "相关文档")]
 - 更多的信息请关注 [M0M1系列sdk更改记录](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/wikis/M0M1系列sdk更改记录) !
 
 
@@ -50,7 +51,7 @@ make at
 
 
 
-### 下载到模块
+### 下载固件
 
 将M0M1系列模块GPIO6在通电前接地。
 在windows环境下使用MylinkDownloadTool.exe将at.img下载。
@@ -74,3 +75,14 @@ make at
 1. `at`:AT指令集+内置WEB服务器+内置网页HTML5和JS
 1. `sntp`:网络同步时间例程
 1. `httpget`:HTTP连接使用GET方式提取数据
+
+
+###  问题反馈
+
+- 如发现问题请提交[issue](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/issues)，我们会在第一时间处理。
+- QQ技术支持群: 519630819
+- 公司主站: http://www.mqlinks.com
+
+
+
+
