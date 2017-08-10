@@ -44,7 +44,7 @@ make at
 将M0M1系列模块GPIO6在通电前接地。
 在windows环境下使用MylinkDownloadTool.exe将at.img下载。
 
-## ~/mylinks-m0m1-open-sdk下项目说明 ##
+## proj下项目说明 ##
 ```
 1.iotaliyun:阿里云物联网套件例程
 2.tcpclient:TCP客户端
