@@ -1,17 +1,19 @@
-# mylinks-m0m1-open-sdk #
+## mylinks-m0m1-open-sdk
 
 ----------
 
-基于 FreeRTOS 的 M0M1系列 SDK开发包。
+
    
-## 注意 ##
+### 环境
+- 基于 `FreeRTOS` 的 M0M1系列 SDK开发包。
+- 'VMware安装包'[下载](http://pan.baidu.com/s/1eRHmoJC)
+- `linux:ubuntu-14.0.4`[iso](http://pan.baidu.com/s/1kUAWzKr)[安装版.7z](https://pan.baidu.com/s/1kUKzQuj)
+- 编译器:[toolchain](https://pan.baidu.com/s/1qY7EEp2)
+- 更多的信息请关注 [M0M1系列sdk更改记录](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/wikis/M0M1系列sdk更改记录) !
 
-更多的信息请关注 [M0M1系列sdk更改记录](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/wikis/M0M1系列sdk更改记录) !
+### 项目
+*mylinks-m0m1-open-sdk
 
-## 要求 ##
-
-编译此SDK包需要下载相应的toolchain编译器.
-下载地址为： [toolchain](https://pan.baidu.com/s/1qY7EEp2).
 
 
   
