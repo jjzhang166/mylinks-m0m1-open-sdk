@@ -19,18 +19,19 @@
 
 克隆 mylinks-m0m1-open-sdk, e.g., to ~/mylinks-m0m1-open-sdk.
 
-    $git clone https://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk.git
+  $git clone https://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk.git
 
 安装编译器：
-	mkdir ~/toolchain
-	cp ba-elf_4.7.3.tgz ~/toolchain
-	cd ~/toolchain
-	tar xvzf ba-elf_4.7.3.tgz
+  mkdir ~/toolchain
+  cp ba-elf_4.7.3.tgz ~/toolchain
+  cd ~/toolchain
+  tar xvzf ba-elf_4.7.3.tgz
 
 生成 img: 
-	cd ~/mylinks-m0m1-open-sdk
+  cd ~/mylinks-m0m1-open-sdk
+
 以SDK包中proj/at为例生成的at.img
-	make at
+  make at
 当编译完成，在~/mylinks-m0m1-open-sdk/image中生成at.img   
 
 
