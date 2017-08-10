@@ -30,14 +30,11 @@ cd ~/toolchain
 tar xvzf ba-elf_4.7.3.tgz
 ```
 
-生成 img:
-以SDK包中proj/at为例生成的at.img
+生成 img,以SDK包中proj/at为例生成的at.img:
 ``` 
 cd ~/mylinks-m0m1-open-sdk
 make at
 ```
-
-    
 
 当编译完成，在~/mylinks-m0m1-open-sdk/image中生成at.img   
 
