@@ -6,7 +6,7 @@
    
 ## 注意 ##
 
-更多的信息请关注 "Wiki" !
+更多的信息请关注 [M0M1系列sdk更改记录](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/wikis/M0M1系列sdk更改记录) !
 
 ## 要求 ##
 
@@ -48,6 +48,7 @@ make at
 在windows环境下使用MylinkDownloadTool.exe将at.img下载。
 
 ## ~/mylinks-m0m1-open-sdk下项目说明 ##
+```
 1.iotaliyun:阿里云物联网套件例程
 2.tcpclient:TCP客户端
 3.mqtt:MQTT客户端
@@ -56,7 +57,6 @@ make at
 6.smartconfig:Smartconfig例程
 7.at:AT指令集+内置WEB服务器+内置网页HTML5和JS
 8.sntp:网络同步时间例程
-
-
+```
 
 
