@@ -61,7 +61,7 @@ make at
 ![config](https://git.oschina.net/uploads/images/2017/0811/071212_6391814f_1444629.png "config_tool.png")
 
 
-- 在`操作`中选择正确的串口号，点击开始:
+- 在`操作`中选择正确的串口号，点击`开始`:
 
 ![start](https://git.oschina.net/uploads/images/2017/0811/071242_50e0f06d_1444629.png "start_tool.png")
 
@@ -83,6 +83,7 @@ make at
 - 如发现问题请提交[issue](http://git.oschina.net/mqlinks/mylinks-m0m1-open-sdk/issues)，我们会在第一时间处理。
 - QQ技术支持群: 519630819
 - 公司主站: http://www.mqlinks.com
+- 企业店铺: http://mlzn.taobao.com
 
 
 
